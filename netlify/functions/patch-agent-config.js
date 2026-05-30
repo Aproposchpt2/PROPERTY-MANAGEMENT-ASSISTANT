@@ -52,29 +52,103 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: 'ELEVENLABS_API_KEY not configured' }) };
   }
 
-  // GET — read current agent webhook config
+  // GET — full agent config review
   if (event.httpMethod === 'GET') {
     try {
       const result = await httpsRequest('GET', `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
-        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }, {});
-      const agent = JSON.parse(result.body);
-      const tools = agent?.conversation_config?.agent?.prompt?.tools || [];
-      const summary = tools.map(t => ({
-        name: t.name,
-        type: t.type,
-        url: t.api_schema?.url || t.api_schema?.query_params_schema ? (t.api_schema?.url || 'GET: ' + t.api_schema?.url) : null,
-        method: t.api_schema?.method || null,
-        required_params: t.api_schema?.request_body_schema?.required || t.api_schema?.query_params_schema?.required || [],
-        system_provided_params: Object.entries(
-          t.api_schema?.request_body_schema?.properties ||
-          t.api_schema?.query_params_schema?.properties || {}
-        ).filter(([, v]) => v.is_system_provided).map(([k]) => k),
-        llm: agent?.conversation_config?.agent?.prompt?.llm || null,
-        turn_eagerness: agent?.conversation_config?.turn?.turn_eagerness || null,
-        turn_timeout: agent?.conversation_config?.turn?.turn_timeout || null,
-        speculative_turn: agent?.conversation_config?.turn?.speculative_turn ?? null,
-      }));
-      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true, agent_id: AGENT_ID, tools: summary }, null, 2) };
+        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }, null);
+      const a = JSON.parse(result.body);
+      const cc = a?.conversation_config || {};
+      const turn = cc.turn || {};
+      const asr = cc.asr || {};
+      const vad = cc.vad || {};
+      const agent = cc.agent || {};
+      const prompt = agent.prompt || {};
+      const tools = prompt.tools || [];
+      const wf = a?.workflow || {};
+      const nodes = wf.nodes || {};
+
+      const report = {
+        ok: true,
+        agent_id: a.agent_id,
+        agent_name: a.name,
+        llm: prompt.llm,
+        temperature: prompt.temperature,
+
+        turn: {
+          turn_timeout: turn.turn_timeout,
+          silence_end_call_timeout: turn.silence_end_call_timeout,
+          turn_eagerness: turn.turn_eagerness,
+          speculative_turn: turn.speculative_turn,
+          retranscribe_on_turn_timeout: turn.retranscribe_on_turn_timeout,
+          interruption_ignore_terms: turn.interruption_ignore_terms,
+          soft_timeout_seconds: turn.soft_timeout_config?.timeout_seconds,
+          soft_timeout_message: turn.soft_timeout_config?.message,
+        },
+
+        asr: {
+          quality: asr.quality,
+          provider: asr.provider,
+          audio_format: asr.user_input_audio_format,
+        },
+
+        vad: {
+          background_voice_detection: vad.background_voice_detection,
+        },
+
+        agent: {
+          first_message: agent.first_message,
+          language: agent.language,
+          max_duration_seconds: cc.conversation?.max_duration_seconds,
+        },
+
+        system_prompt_preview: (prompt.prompt || '').slice(0, 300) + '...',
+
+        tools: tools.map(t => ({
+          name: t.name,
+          type: t.type,
+          url: t.api_schema?.url,
+          method: t.api_schema?.method,
+          required_params: t.api_schema?.request_body_schema?.required
+            || t.api_schema?.query_params_schema?.required || [],
+          system_provided: Object.entries(
+            t.api_schema?.request_body_schema?.properties
+            || t.api_schema?.query_params_schema?.properties || {}
+          ).filter(([, v]) => v.is_system_provided).map(([k]) => k),
+          llm_provided: Object.entries(
+            t.api_schema?.request_body_schema?.properties
+            || t.api_schema?.query_params_schema?.properties || {}
+          ).filter(([, v]) => !v.is_system_provided).map(([k]) => k),
+        })),
+
+        built_in_tools: Object.keys(prompt.built_in_tools || {})
+          .filter(k => prompt.built_in_tools[k] !== null),
+
+        workflow_nodes: Object.entries(nodes).map(([id, node]) => ({
+          id,
+          type: node.type,
+          label: node.label,
+          prompt_preview: node.additional_prompt
+            ? node.additional_prompt.slice(0, 150) + '...'
+            : null,
+          edges_out: (wf.edges ? Object.entries(wf.edges)
+            .filter(([, e]) => e.source === id)
+            .map(([eid, e]) => ({
+              edge: eid,
+              target: e.target,
+              condition_type: e.forward_condition?.type,
+              condition: e.forward_condition?.condition || 'unconditional',
+            })) : []),
+        })),
+
+        phone_numbers: (a.phone_numbers || []).map(p => ({
+          number: p.phone_number,
+          label: p.label,
+          agent_assigned: p.assigned_agent?.agent_name,
+        })),
+      };
+
+      return { statusCode: 200, headers: cors, body: JSON.stringify(report, null, 2) };
     } catch (err) {
       return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: err.message }) };
     }
