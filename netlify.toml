@@ -4,7 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,OWNER_NOTIFICATION_EMAIL,RESEND_FROM_EMAIL,RESEND_TO_EMAIL"
 
 [build.processing]
   [build.processing.css]
