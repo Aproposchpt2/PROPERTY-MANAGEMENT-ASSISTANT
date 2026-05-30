@@ -112,7 +112,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         turn_timeout: 20,
         silence_end_call_timeout: -1,
         mode: 'turn',
-        turn_eagerness: 'low',
+        turn_eagerness: 'patient',
         speculative_turn: false,
         retranscribe_on_turn_timeout: true,
         turn_model: 'turn_v2',
