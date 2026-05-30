@@ -154,12 +154,12 @@ footer{
             <input type="email" id="email" name="email" placeholder="jane@acmecorp.com" autocomplete="email" />
             <div class="field-error" id="err_email">Please enter a valid email address.</div>
           </div>
-          <div class="field">
-            <label class="consent-label">
-              <input type="checkbox" id="sms_consent" required style="margin-top:3px;flex-shrink:0">
-              <span>I agree to receive SMS notifications from FlowDesk Pro. Reply STOP to opt out at any time. Message and data rates may apply. See our <a href="/privacy.html" style="color:var(--cyan)">Privacy Policy</a> and <a href="/terms.html" style="color:var(--cyan)">Terms</a>.</span>
+          <div class="sms-opt-in" style="margin:16px 0;padding:12px 14px;border:1px solid rgba(115,230,255,.22);border-radius:12px;background:rgba(115,230,255,.04)">
+            <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--muted);cursor:pointer;line-height:1.55">
+              <input type="checkbox" id="sms_consent" name="sms_consent" value="yes" style="margin-top:3px;flex-shrink:0;accent-color:var(--cyan)">
+              <span>I agree to receive SMS notifications from AI4 Businesses / FlowDesk Pro regarding my demo request, follow-up communications, and service updates. Message and data rates may apply. Message frequency varies. Reply STOP to unsubscribe at any time. Reply HELP for help. View our <a href="https://ai4businesses.org/privacy" target="_blank" style="color:var(--cyan)">Privacy Policy</a> and <a href="https://ai4businesses.org/terms" target="_blank" style="color:var(--cyan)">Terms of Service</a>.</span>
             </label>
-            <div class="field-error" id="err_sms_consent">Please agree to the SMS terms to continue.</div>
+            <p style="font-size:11px;color:var(--soft);margin:8px 0 0 25px;line-height:1.5">SMS consent is optional. You may still submit this form without checking this box. Standard message and data rates may apply.</p>
           </div>
           <button type="submit" class="submit-btn" id="submitBtn">Request My Demo →</button>
           <div class="form-general-error" id="generalError">Something went wrong. Please try again.</div>
@@ -209,7 +209,7 @@ footer{
       if (!contactName) { showError('contact_name', 'err_contact_name'); valid = false; }
       if (!phone || phone.replace(/\D/g, '').length < 10) { showError('phone', 'err_phone'); valid = false; }
       if (!email || !email.includes('@') || !email.includes('.')) { showError('email', 'err_email'); valid = false; }
-      if (!document.getElementById('sms_consent').checked) { showError('sms_consent', 'err_sms_consent'); valid = false; }
+      // sms_consent is optional — no validation required
 
       return valid;
     }
@@ -227,7 +227,8 @@ footer{
         contact_name: document.getElementById('contact_name').value.trim(),
         phone: document.getElementById('phone').value.trim(),
         email: document.getElementById('email').value.trim(),
-        sms_consent: document.getElementById('sms_consent').checked,
+        sms_consent: document.getElementById('sms_consent').checked ? 'yes' : 'no',
+        demo_site: 'contact-center.aiflowdeskpro.com',
       };
 
       try {
