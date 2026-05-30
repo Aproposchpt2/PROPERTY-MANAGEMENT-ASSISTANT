@@ -9,14 +9,16 @@ const https = require('https');
 const AGENT_ID = 'agent_6101ksv5amdpfqn90z89gtvh34a7';
 
 function httpsRequest(method, urlStr, headers, body) {
-  const buf = Buffer.from(JSON.stringify(body));
+  const buf = body && method !== 'GET' ? Buffer.from(JSON.stringify(body)) : null;
+  const reqHeaders = { ...headers };
+  if (buf) reqHeaders['Content-Length'] = buf.length;
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const req = https.request({
       hostname: url.hostname,
       path: url.pathname + url.search,
       method,
-      headers: { ...headers, 'Content-Length': buf.length },
+      headers: reqHeaders,
     }, (res) => {
       let data = '';
       res.on('data', c => { data += c; });
@@ -24,7 +26,7 @@ function httpsRequest(method, urlStr, headers, body) {
     });
     req.on('error', reject);
     req.setTimeout(15000, () => req.destroy(new Error('Timeout')));
-    req.write(buf);
+    if (buf) req.write(buf);
     req.end();
   });
 }
