@@ -210,6 +210,16 @@ CRITICAL RULES:
     },
     workflow: {
       nodes: {
+        start_node: {
+          type: 'start',
+          position: { x: 0, y: 0 },
+          edge_order: ['edge_start_to_identify'],
+        },
+        end_node: {
+          type: 'end',
+          position: { x: 0, y: 880 },
+          edge_order: [],
+        },
         identify_issue: {
           label: 'Identify Issue',
           additional_prompt: `Your ONLY task in this step: collect the caller's first name, last name, and reason for calling.
