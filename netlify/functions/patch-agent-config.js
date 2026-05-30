@@ -1,7 +1,7 @@
 'use strict';
 
 // POST /.netlify/functions/patch-agent-config
-// Patches the ElevenLabs Customer Support agent configuration.
+// Patches the ElevenLabs Customer Support agent — cellular audio optimized.
 // Protected by PATCH_SECRET env var.
 // Uses ELEVENLABS_API_KEY from Netlify environment.
 
@@ -53,35 +53,34 @@ exports.handler = async (event) => {
   }
 
   const SYSTEM_PROMPT = `# Personality
-You are Alex, a calm and knowledgeable support specialist at an AI software company. You genuinely enjoy helping callers and take pride in making every interaction clear and professional. You're patient, attentive, and never condescending — you give every caller the time they need to explain their situation fully.
+You are Alex, a calm and knowledgeable support specialist at FlowDesk Pro. You are patient, attentive, and give every caller the time they need to explain their situation fully without interruption.
 
 # Environment
-You work on the support team for FlowDesk Pro — an AI platform providing contact center, CRM, and business automation systems. Callers are business owners, staff, or prospects with questions about products, demos, billing, or technical issues.
+You handle inbound calls for FlowDesk Pro — an AI platform providing contact center, CRM, and business automation systems. Callers are business owners, staff, or prospects.
 
 # Tone
 - Warm but professional
 - Patient — never rush the caller
 - Empathetic first — always acknowledge before acting
 - Concise and clear
-- Honest — if you don't know something, say so
 
 # Goal
-Greet callers, collect their first name, last name, and reason for call. Then either transfer to the right department or document the request for callback.
+Greet callers, collect their first name, last name, and reason for call. Then transfer or document for callback.
 
-# Listening rules — CRITICAL
-- ALWAYS let the caller finish speaking completely before responding
+# Critical listening rules
+- ALWAYS let the caller finish their complete thought before responding
 - NEVER interrupt a caller mid-sentence under any circumstances
-- After asking a question, WAIT in silence for the caller's full response
-- Silence from the caller is NOT a signal to end the call
-- Single-word responses like 'okay', 'yes', 'sure', 'thanks' are NOT conversation endings
-- If the caller pauses mid-sentence, wait — they are still forming their thought
-- Minimum wait after caller stops speaking: 3 seconds before responding
+- Cellular callers may have micro-pauses in their audio — these are NOT end-of-turn signals
+- After asking a question, wait in silence for the caller's COMPLETE response
+- Silence or brief pauses do NOT mean the caller has finished speaking
+- Single words like 'okay', 'yes', 'sure', 'thanks', 'um', 'uh' are NOT conversation endings
+- Wait at least 3 full seconds of silence before assuming the caller has finished speaking
 
 # Collecting caller information
-Ask one question at a time. Wait fully for each answer before proceeding.
-1. First ask: first name and last name together
-2. Then ask: reason for call
-3. Then confirm next steps and close naturally
+Ask one question at a time. Wait fully for each complete answer.
+1. Ask for first name and last name
+2. Ask for reason for call
+3. Confirm next steps and close naturally
 
 # When to end the call
 ONLY end the call when ALL of these are true:
@@ -89,31 +88,38 @@ ONLY end the call when ALL of these are true:
 - You have collected caller last name
 - You have collected reason for call
 - You have provided a clear closing statement confirming next steps
-- Caller has acknowledged the closing with a complete response
+- Caller has responded with a complete closing acknowledgement
 
 NEVER end the call:
-- While waiting for caller to respond
+- While the caller is speaking
+- While waiting for a caller response
 - After asking a question
-- On single word responses like 'okay' 'sure' 'yes' 'thanks'
+- On single words like 'okay' 'sure' 'yes' 'thanks' 'uh-huh'
 - Before collecting all required information
-- Before confirming next steps with caller
-- If the caller is mid-sentence
-
-The call must feel complete and natural. The caller should never feel cut off.
+- If there is a brief audio pause mid-sentence
 
 ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye alone leaves the call open.`;
 
   const payload = {
     conversation_config: {
+      asr: {
+        quality: 'high',
+        provider: 'scribe_realtime',
+        user_input_audio_format: 'pcm_16000',
+        keywords: [],
+      },
       turn: {
-        turn_timeout: 15,
+        turn_timeout: 20,
         silence_end_call_timeout: -1,
         mode: 'turn',
         turn_eagerness: 'low',
         speculative_turn: false,
-        retranscribe_on_turn_timeout: false,
+        retranscribe_on_turn_timeout: true,
         turn_model: 'turn_v2',
-        interruption_ignore_terms: [],
+        interruption_ignore_terms: [
+          'um', 'uh', 'hmm', 'yeah', 'okay', 'ok',
+          'sure', 'right', 'yes', 'no', 'thanks', 'uh-huh',
+        ],
         soft_timeout_config: {
           timeout_seconds: -1,
           message: 'Are you still there?',
@@ -124,15 +130,16 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         background_voice_detection: false,
       },
       agent: {
-        first_message: 'Hello, this is Alex from support — can I get your first and last name and the reason for your call today?',
+        first_message: 'Hello, this is Alex from FlowDesk Pro support — can I get your first and last name and the reason for your call today?',
         prompt: {
           prompt: SYSTEM_PROMPT,
           llm: 'claude-sonnet-4-5',
+          temperature: 0.3,
           tools: [
             {
               type: 'webhook',
               name: 'log_call',
-              description: 'Log the call record to the contact center database at the end of every conversation. Always call this at the very end — caller_phone is optional.',
+              description: 'Log the call record at the end of every conversation. Always call this at the very end — caller_phone is optional.',
               response_timeout_secs: 20,
               disable_interruptions: false,
               force_pre_tool_speech: false,
@@ -167,7 +174,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
             {
               type: 'webhook',
               name: 'lookup_caller',
-              description: 'Look up the caller record at the start of every conversation using their phone number.',
+              description: 'Look up the caller record at the start of every conversation.',
               response_timeout_secs: 20,
               disable_interruptions: false,
               force_pre_tool_speech: false,
@@ -216,7 +223,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         headers: cors,
         body: JSON.stringify({
           ok: true,
-          message: 'Agent updated — turn_eagerness low, speculative_turn off, turn_timeout 15s, Jamie→Alex, end_call triggers tightened',
+          message: 'Agent updated — cellular audio optimized: turn_eagerness low, turn_timeout 20s, speculative_turn off, interruption_ignore_terms set, retranscribe on timeout, Alex branding, temperature 0.3',
           elevenlabs_status: result.status,
         }),
       };
