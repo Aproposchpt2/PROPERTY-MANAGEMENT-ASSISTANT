@@ -1,9 +1,9 @@
 'use strict';
 
 // POST /.netlify/functions/patch-agent-config
-// One-time utility: patches the ElevenLabs Customer Support agent with correct tool config.
-// Protected by PATCH_SECRET env var — set a random string in Netlify and pass as header.
-// Uses ELEVENLABS_API_KEY from Netlify environment — key never exposed in code or chat.
+// Patches the ElevenLabs Customer Support agent configuration.
+// Protected by PATCH_SECRET env var.
+// Uses ELEVENLABS_API_KEY from Netlify environment.
 
 const https = require('https');
 
@@ -39,7 +39,6 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors, body: '' };
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false }) };
 
-  // Protect with a secret so this can't be triggered by anyone
   const patchSecret = process.env.PATCH_SECRET;
   if (patchSecret) {
     const provided = (event.headers['x-patch-secret'] || event.headers['X-Patch-Secret'] || '').trim();
@@ -50,19 +49,73 @@ exports.handler = async (event) => {
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: 'ELEVENLABS_API_KEY not configured in Netlify env vars' }) };
+    return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: 'ELEVENLABS_API_KEY not configured' }) };
   }
+
+  const SYSTEM_PROMPT = `# Personality
+You are Jamie, a calm and knowledgeable support engineer at an AI software company. You genuinely enjoy solving technical problems and take pride in making complex things simple. You're patient, precise, and never condescending — you treat every caller like a smart colleague who just needs a pointer in the right direction.
+
+# Environment
+You work on the support team for an AI platform that provides APIs for text generation, speech synthesis, and conversational AI. Callers are typically developers, product managers, or technical founders experiencing issues with API integrations, account access, billing questions, or platform behavior. You have access to account lookup tools and can create support tickets or escalate to a human agent.
+
+# Tone
+- Warm but professional — friendly without being overly casual
+- Technically confident — you know the platform inside and out
+- Empathetic first — always acknowledge the caller's frustration before troubleshooting
+- Concise — give clear, actionable steps without over-explaining
+- Honest — if you don't know something, say so and escalate
+
+# Goal
+Your main goal is to act as a front-line AI Contact Center agent. You will greet callers, identify their first and last name, and ascertain the reason for their call. Based on this information, you will either transfer them to the correct department or document their request for a staff member to review, confirming their contact number for a callback.
+
+# Collecting caller information
+After asking for first name, last name, and reason for call — WAIT for the caller to respond fully before taking any action. Silence from the caller is NOT a signal to end the call. Wait at least 10 seconds for caller response before prompting again. Never rush the caller. Ask one question at a time and wait for the complete answer.
+
+# When to end the call
+ONLY end the call when ALL of these are true:
+- You have collected caller first name
+- You have collected caller last name
+- You have collected reason for call
+- You have provided a clear closing statement confirming next steps
+- Caller has acknowledged the closing
+
+NEVER end the call:
+- While waiting for caller to respond
+- After asking a question
+- On single word responses like 'okay' 'sure' 'yes' 'thanks'
+- Before collecting all required information
+- Before confirming next steps with caller
+
+The call must feel complete and natural. The caller should never feel cut off.
+
+ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is truly complete. Verbal goodbye alone leaves the call open.`;
 
   const payload = {
     conversation_config: {
+      turn: {
+        turn_timeout: 15,
+        silence_end_call_timeout: -1,
+        mode: 'turn',
+        turn_eagerness: 'normal',
+        speculative_turn: false,
+        retranscribe_on_turn_timeout: false,
+        turn_model: 'turn_v2',
+        interruption_ignore_terms: [],
+        soft_timeout_config: {
+          timeout_seconds: -1,
+          message: 'Are you still there?',
+          use_llm_generated_message: false,
+        },
+      },
       agent: {
         prompt: {
+          prompt: SYSTEM_PROMPT,
           llm: 'claude-sonnet-4-5',
           tools: [
             {
               type: 'webhook',
               name: 'log_call',
-              description: 'Log the call record to the contact center database at the end of every conversation. Always call this — caller_phone is optional.',
+              description: 'Log the call record to the contact center database at the end of every conversation. Always call this at the very end — caller_phone is optional.',
               response_timeout_secs: 20,
               disable_interruptions: false,
               force_pre_tool_speech: false,
@@ -82,7 +135,7 @@ exports.handler = async (event) => {
                 request_body_schema: {
                   type: 'object',
                   required: [],
-                  description: 'Log call data at end of conversation. caller_phone is optional.',
+                  description: 'Log call data at end of conversation.',
                   properties: {
                     caller_phone: {
                       type: 'string',
@@ -153,18 +206,18 @@ exports.handler = async (event) => {
     );
 
     if (result.status >= 200 && result.status < 300) {
-      console.log('PATCH-AGENT: success status', result.status);
+      console.log('PATCH-AGENT: success', result.status);
       return {
         statusCode: 200,
         headers: cors,
         body: JSON.stringify({
           ok: true,
-          message: 'Agent updated — log_call and lookup_caller now system-provided, LLM set to claude-sonnet-4-5',
+          message: 'Agent updated — turn_timeout 15s, speculative_turn off, end_call prompt fixed, LLM claude-sonnet-4-5',
           elevenlabs_status: result.status,
         }),
       };
     } else {
-      console.error('PATCH-AGENT: ElevenLabs error', result.status, result.body);
+      console.error('PATCH-AGENT error', result.status, result.body);
       return {
         statusCode: 502,
         headers: cors,
@@ -172,7 +225,6 @@ exports.handler = async (event) => {
       };
     }
   } catch (err) {
-    console.error('PATCH-AGENT: exception', err.message);
     return {
       statusCode: 500,
       headers: cors,
