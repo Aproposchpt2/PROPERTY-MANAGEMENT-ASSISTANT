@@ -1,9 +1,8 @@
 'use strict';
 
 // POST /.netlify/functions/patch-agent-config
-// Patches the ElevenLabs Customer Support agent — cellular audio optimized.
-// Protected by PATCH_SECRET env var.
-// Uses ELEVENLABS_API_KEY from Netlify environment.
+// Patches ElevenLabs agent — fixes premature disconnect caused by workflow node routing.
+// Protected by PATCH_SECRET. Uses ELEVENLABS_API_KEY from Netlify environment.
 
 const https = require('https');
 
@@ -52,53 +51,24 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: 'ELEVENLABS_API_KEY not configured' }) };
   }
 
-  const SYSTEM_PROMPT = `# Personality
-You are Alex, a calm and knowledgeable support specialist at FlowDesk Pro. You are patient, attentive, and give every caller the time they need to explain their situation fully without interruption.
+  const SYSTEM_PROMPT = `You are Alex, a patient and professional support specialist at FlowDesk Pro.
 
-# Environment
-You handle inbound calls for FlowDesk Pro — an AI platform providing contact center, CRM, and business automation systems. Callers are business owners, staff, or prospects.
+Your ONLY job on this call:
+1. Greet the caller warmly
+2. Collect their first name
+3. Collect their last name
+4. Collect their reason for calling
+5. Confirm you will pass their information to the team
+6. Then and ONLY then — end the call politely
 
-# Tone
-- Warm but professional
-- Patient — never rush the caller
-- Empathetic first — always acknowledge before acting
-- Concise and clear
-
-# Goal
-Greet callers, collect their first name, last name, and reason for call. Then transfer or document for callback.
-
-# Critical listening rules
-- ALWAYS let the caller finish their complete thought before responding
-- NEVER interrupt a caller mid-sentence under any circumstances
-- Cellular callers may have micro-pauses in their audio — these are NOT end-of-turn signals
-- After asking a question, wait in silence for the caller's COMPLETE response
-- Silence or brief pauses do NOT mean the caller has finished speaking
-- Single words like 'okay', 'yes', 'sure', 'thanks', 'um', 'uh' are NOT conversation endings
-- Wait at least 3 full seconds of silence before assuming the caller has finished speaking
-
-# Collecting caller information
-Ask one question at a time. Wait fully for each complete answer.
-1. Ask for first name and last name
-2. Ask for reason for call
-3. Confirm next steps and close naturally
-
-# When to end the call
-ONLY end the call when ALL of these are true:
-- You have collected caller first name
-- You have collected caller last name
-- You have collected reason for call
-- You have provided a clear closing statement confirming next steps
-- Caller has responded with a complete closing acknowledgement
-
-NEVER end the call:
-- While the caller is speaking
-- While waiting for a caller response
-- After asking a question
-- On single words like 'okay' 'sure' 'yes' 'thanks' 'uh-huh'
-- Before collecting all required information
-- If there is a brief audio pause mid-sentence
-
-ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye alone leaves the call open.`;
+CRITICAL RULES:
+- NEVER end the call before collecting all three pieces of information
+- NEVER interrupt the caller while they are speaking
+- Wait at least 3 full seconds after the caller stops speaking before responding
+- Cellular callers may have audio gaps mid-sentence — these are NOT end-of-turn signals
+- Single words like 'yes', 'okay', 'sure', 'thanks', 'um', 'uh' are NOT call endings
+- If you have only the name and not the reason for call, keep the call going
+- After collecting all information: thank them, confirm next steps, then call end_call`;
 
   const payload = {
     conversation_config: {
@@ -130,7 +100,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         background_voice_detection: false,
       },
       agent: {
-        first_message: 'Hello, this is Alex from FlowDesk Pro support — can I get your first and last name and the reason for your call today?',
+        first_message: 'Hello, this is Alex from FlowDesk Pro — can I get your first and last name please?',
         prompt: {
           prompt: SYSTEM_PROMPT,
           llm: 'claude-sonnet-4-5',
@@ -139,7 +109,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
             {
               type: 'webhook',
               name: 'log_call',
-              description: 'Log the call record at the end of every conversation. Always call this at the very end — caller_phone is optional.',
+              description: 'Log the call record at the end of every conversation. Call this only after collecting name and reason and completing the goodbye. caller_phone is optional.',
               response_timeout_secs: 20,
               disable_interruptions: false,
               force_pre_tool_speech: false,
@@ -174,7 +144,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
             {
               type: 'webhook',
               name: 'lookup_caller',
-              description: 'Look up the caller record at the start of every conversation.',
+              description: 'Look up the caller record at the start of the conversation.',
               response_timeout_secs: 20,
               disable_interruptions: false,
               force_pre_tool_speech: false,
@@ -207,6 +177,47 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         },
       },
     },
+    workflow: {
+      nodes: {
+        identify_issue: {
+          additional_prompt: `Your ONLY task in this step: collect the caller's first name, last name, and reason for calling.
+
+DO NOT advance, DO NOT route, DO NOT end the call until you have ALL THREE:
+- First name ✓
+- Last name ✓
+- Reason for call ✓
+
+If you only have the name and not the reason: ask "And what is the reason for your call today?" and WAIT.
+If you only have the reason and not the full name: ask for the missing name part and WAIT.
+
+NEVER call end_call in this step.
+NEVER interpret a name response as a conversation ending.
+After you have all three — confirm: "Thank you [Name], I'll make sure the team follows up with you about [reason]. Is there anything else before I let you go?"
+Then wait for their response before routing forward.`,
+          additional_knowledge_base: [],
+          additional_tool_ids: [],
+          type: 'override_agent',
+        },
+        troubleshoot: {
+          additional_prompt: `You are helping the caller with a technical issue. Get details about their problem. Do NOT end the call until you have their contact information confirmed and have set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
+          additional_knowledge_base: [],
+          additional_tool_ids: [],
+          type: 'override_agent',
+        },
+        account_billing: {
+          additional_prompt: `You are helping the caller with an account or billing question. Gather details. Do NOT end the call until you have confirmed their contact information and set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
+          additional_knowledge_base: [],
+          additional_tool_ids: [],
+          type: 'override_agent',
+        },
+        resolve_or_escalate: {
+          additional_prompt: `Summarize what you've collected: caller name, reason for call, and any details. Confirm next steps clearly. Ask: "Is there anything else I can help you with today?" Wait for their response. ONLY call end_call after the caller has acknowledged the closing and there is nothing more to address.`,
+          additional_knowledge_base: [],
+          additional_tool_ids: [],
+          type: 'override_agent',
+        },
+      },
+    },
   };
 
   try {
@@ -223,7 +234,7 @@ ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye al
         headers: cors,
         body: JSON.stringify({
           ok: true,
-          message: 'Agent updated — cellular audio optimized: turn_eagerness low, turn_timeout 20s, speculative_turn off, interruption_ignore_terms set, retranscribe on timeout, Alex branding, temperature 0.3',
+          message: 'Agent updated — workflow nodes patched, identify_issue requires all 3 fields before routing, resolve_or_escalate requires explicit close before end_call',
           elevenlabs_status: result.status,
         }),
       };
