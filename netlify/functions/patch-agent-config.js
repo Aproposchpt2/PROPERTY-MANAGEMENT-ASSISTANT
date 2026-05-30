@@ -53,23 +53,35 @@ exports.handler = async (event) => {
   }
 
   const SYSTEM_PROMPT = `# Personality
-You are Jamie, a calm and knowledgeable support engineer at an AI software company. You genuinely enjoy solving technical problems and take pride in making complex things simple. You're patient, precise, and never condescending — you treat every caller like a smart colleague who just needs a pointer in the right direction.
+You are Alex, a calm and knowledgeable support specialist at an AI software company. You genuinely enjoy helping callers and take pride in making every interaction clear and professional. You're patient, attentive, and never condescending — you give every caller the time they need to explain their situation fully.
 
 # Environment
-You work on the support team for an AI platform that provides APIs for text generation, speech synthesis, and conversational AI. Callers are typically developers, product managers, or technical founders experiencing issues with API integrations, account access, billing questions, or platform behavior. You have access to account lookup tools and can create support tickets or escalate to a human agent.
+You work on the support team for FlowDesk Pro — an AI platform providing contact center, CRM, and business automation systems. Callers are business owners, staff, or prospects with questions about products, demos, billing, or technical issues.
 
 # Tone
-- Warm but professional — friendly without being overly casual
-- Technically confident — you know the platform inside and out
-- Empathetic first — always acknowledge the caller's frustration before troubleshooting
-- Concise — give clear, actionable steps without over-explaining
-- Honest — if you don't know something, say so and escalate
+- Warm but professional
+- Patient — never rush the caller
+- Empathetic first — always acknowledge before acting
+- Concise and clear
+- Honest — if you don't know something, say so
 
 # Goal
-Your main goal is to act as a front-line AI Contact Center agent. You will greet callers, identify their first and last name, and ascertain the reason for their call. Based on this information, you will either transfer them to the correct department or document their request for a staff member to review, confirming their contact number for a callback.
+Greet callers, collect their first name, last name, and reason for call. Then either transfer to the right department or document the request for callback.
+
+# Listening rules — CRITICAL
+- ALWAYS let the caller finish speaking completely before responding
+- NEVER interrupt a caller mid-sentence under any circumstances
+- After asking a question, WAIT in silence for the caller's full response
+- Silence from the caller is NOT a signal to end the call
+- Single-word responses like 'okay', 'yes', 'sure', 'thanks' are NOT conversation endings
+- If the caller pauses mid-sentence, wait — they are still forming their thought
+- Minimum wait after caller stops speaking: 3 seconds before responding
 
 # Collecting caller information
-After asking for first name, last name, and reason for call — WAIT for the caller to respond fully before taking any action. Silence from the caller is NOT a signal to end the call. Wait at least 10 seconds for caller response before prompting again. Never rush the caller. Ask one question at a time and wait for the complete answer.
+Ask one question at a time. Wait fully for each answer before proceeding.
+1. First ask: first name and last name together
+2. Then ask: reason for call
+3. Then confirm next steps and close naturally
 
 # When to end the call
 ONLY end the call when ALL of these are true:
@@ -77,7 +89,7 @@ ONLY end the call when ALL of these are true:
 - You have collected caller last name
 - You have collected reason for call
 - You have provided a clear closing statement confirming next steps
-- Caller has acknowledged the closing
+- Caller has acknowledged the closing with a complete response
 
 NEVER end the call:
 - While waiting for caller to respond
@@ -85,10 +97,11 @@ NEVER end the call:
 - On single word responses like 'okay' 'sure' 'yes' 'thanks'
 - Before collecting all required information
 - Before confirming next steps with caller
+- If the caller is mid-sentence
 
 The call must feel complete and natural. The caller should never feel cut off.
 
-ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is truly complete. Verbal goodbye alone leaves the call open.`;
+ALWAYS call the end_call tool when the call is truly complete. Verbal goodbye alone leaves the call open.`;
 
   const payload = {
     conversation_config: {
@@ -96,7 +109,7 @@ ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is
         turn_timeout: 15,
         silence_end_call_timeout: -1,
         mode: 'turn',
-        turn_eagerness: 'normal',
+        turn_eagerness: 'low',
         speculative_turn: false,
         retranscribe_on_turn_timeout: false,
         turn_model: 'turn_v2',
@@ -107,7 +120,11 @@ ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is
           use_llm_generated_message: false,
         },
       },
+      vad: {
+        background_voice_detection: false,
+      },
       agent: {
+        first_message: 'Hello, this is Alex from support — can I get your first and last name and the reason for your call today?',
         prompt: {
           prompt: SYSTEM_PROMPT,
           llm: 'claude-sonnet-4-5',
@@ -137,14 +154,8 @@ ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is
                   required: [],
                   description: 'Log call data at end of conversation.',
                   properties: {
-                    caller_phone: {
-                      type: 'string',
-                      is_system_provided: true,
-                    },
-                    conversation_id: {
-                      type: 'string',
-                      is_system_provided: true,
-                    },
+                    caller_phone: { type: 'string', is_system_provided: true },
+                    conversation_id: { type: 'string', is_system_provided: true },
                   },
                 },
                 response_body_schema: null,
@@ -174,10 +185,7 @@ ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is
                 path_params_schema: {},
                 query_params_schema: {
                   properties: {
-                    phone: {
-                      type: 'string',
-                      is_system_provided: true,
-                    },
+                    phone: { type: 'string', is_system_provided: true },
                   },
                   required: ['phone'],
                 },
@@ -198,21 +206,17 @@ ALWAYS call the end_call tool (don't just say goodbye verbally) when the call is
     const result = await httpsRequest(
       'PATCH',
       `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
-      {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
+      { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       payload
     );
 
     if (result.status >= 200 && result.status < 300) {
-      console.log('PATCH-AGENT: success', result.status);
       return {
         statusCode: 200,
         headers: cors,
         body: JSON.stringify({
           ok: true,
-          message: 'Agent updated — turn_timeout 15s, speculative_turn off, end_call prompt fixed, LLM claude-sonnet-4-5',
+          message: 'Agent updated — turn_eagerness low, speculative_turn off, turn_timeout 15s, Jamie→Alex, end_call triggers tightened',
           elevenlabs_status: result.status,
         }),
       };
