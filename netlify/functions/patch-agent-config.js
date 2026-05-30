@@ -86,17 +86,11 @@ exports.handler = async (event) => {
                   properties: {
                     caller_phone: {
                       type: 'string',
-                      description: 'The caller phone number from the inbound call. Auto-provided by system.',
                       is_system_provided: true,
-                      dynamic_variable: '',
-                      constant_value: '',
                     },
                     conversation_id: {
                       type: 'string',
-                      description: 'The ElevenLabs conversation ID. Auto-provided by system.',
                       is_system_provided: true,
-                      dynamic_variable: '',
-                      constant_value: '',
                     },
                   },
                 },
@@ -129,10 +123,7 @@ exports.handler = async (event) => {
                   properties: {
                     phone: {
                       type: 'string',
-                      description: 'The caller phone number from the inbound call. Auto-provided by system.',
                       is_system_provided: true,
-                      dynamic_variable: '',
-                      constant_value: '',
                     },
                   },
                   required: ['phone'],
