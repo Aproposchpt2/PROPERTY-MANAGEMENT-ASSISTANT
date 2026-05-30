@@ -211,6 +211,7 @@ CRITICAL RULES:
     workflow: {
       nodes: {
         identify_issue: {
+          label: 'Identify Issue',
           additional_prompt: `Your ONLY task in this step: collect the caller's first name, last name, and reason for calling.
 
 DO NOT advance, DO NOT route, DO NOT end the call until you have ALL THREE:
@@ -230,18 +231,21 @@ Then wait for their response before routing forward.`,
           type: 'override_agent',
         },
         troubleshoot: {
+          label: 'Troubleshoot',
           additional_prompt: `You are helping the caller with a technical issue. Get details about their problem. Do NOT end the call until you have their contact information confirmed and have set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
         },
         account_billing: {
+          label: 'Account & Billing',
           additional_prompt: `You are helping the caller with an account or billing question. Gather details. Do NOT end the call until you have confirmed their contact information and set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
         },
         resolve_or_escalate: {
+          label: 'Resolve or Escalate',
           additional_prompt: `Summarize what you've collected: caller name, reason for call, and any details. Confirm next steps clearly. Ask: "Is there anything else I can help you with today?" Wait for their response. ONLY call end_call after the caller has acknowledged the closing and there is nothing more to address.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
