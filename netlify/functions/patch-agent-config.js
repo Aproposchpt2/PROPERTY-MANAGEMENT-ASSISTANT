@@ -344,6 +344,50 @@ CRITICAL RULES:
       },
     },
     workflow: {
+      edges: {
+        edge_start_to_identify: {
+          source: 'start_node',
+          target: 'identify_issue',
+          forward_condition: { type: 'unconditional' },
+          backward_condition: null,
+        },
+        edge_identify_to_troubleshoot: {
+          source: 'identify_issue',
+          target: 'troubleshoot',
+          forward_condition: {
+            type: 'llm',
+            condition: 'The caller has a technical issue, API error, integration problem, or performance concern',
+          },
+          backward_condition: null,
+        },
+        edge_identify_to_billing: {
+          source: 'identify_issue',
+          target: 'account_billing',
+          forward_condition: {
+            type: 'llm',
+            condition: 'The caller has an account access issue, billing question, plan inquiry, or payment problem',
+          },
+          backward_condition: null,
+        },
+        edge_troubleshoot_to_resolve: {
+          source: 'troubleshoot',
+          target: 'resolve_or_escalate',
+          forward_condition: { type: 'unconditional' },
+          backward_condition: null,
+        },
+        edge_billing_to_resolve: {
+          source: 'account_billing',
+          target: 'resolve_or_escalate',
+          forward_condition: { type: 'unconditional' },
+          backward_condition: null,
+        },
+        edge_resolve_to_end: {
+          source: 'resolve_or_escalate',
+          target: 'end_node',
+          forward_condition: { type: 'unconditional' },
+          backward_condition: null,
+        },
+      },
       nodes: {
         start_node: {
           type: 'start',
