@@ -36,7 +36,6 @@ exports.handler = async (event) => {
   };
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors, body: '' };
-  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false }) };
 
   const patchSecret = process.env.PATCH_SECRET;
   if (patchSecret) {
@@ -50,6 +49,36 @@ exports.handler = async (event) => {
   if (!apiKey) {
     return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: 'ELEVENLABS_API_KEY not configured' }) };
   }
+
+  // GET — read current agent webhook config
+  if (event.httpMethod === 'GET') {
+    try {
+      const result = await httpsRequest('GET', `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
+        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }, {});
+      const agent = JSON.parse(result.body);
+      const tools = agent?.conversation_config?.agent?.prompt?.tools || [];
+      const summary = tools.map(t => ({
+        name: t.name,
+        type: t.type,
+        url: t.api_schema?.url || t.api_schema?.query_params_schema ? (t.api_schema?.url || 'GET: ' + t.api_schema?.url) : null,
+        method: t.api_schema?.method || null,
+        required_params: t.api_schema?.request_body_schema?.required || t.api_schema?.query_params_schema?.required || [],
+        system_provided_params: Object.entries(
+          t.api_schema?.request_body_schema?.properties ||
+          t.api_schema?.query_params_schema?.properties || {}
+        ).filter(([, v]) => v.is_system_provided).map(([k]) => k),
+        llm: agent?.conversation_config?.agent?.prompt?.llm || null,
+        turn_eagerness: agent?.conversation_config?.turn?.turn_eagerness || null,
+        turn_timeout: agent?.conversation_config?.turn?.turn_timeout || null,
+        speculative_turn: agent?.conversation_config?.turn?.speculative_turn ?? null,
+      }));
+      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true, agent_id: AGENT_ID, tools: summary }, null, 2) };
+    } catch (err) {
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: err.message }) };
+    }
+  }
+
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false }) };
 
   const SYSTEM_PROMPT = `You are Alex, a patient and professional support specialist at FlowDesk Pro.
 
