@@ -269,7 +269,7 @@ CRITICAL RULES:
                   properties: {
                     phone: { type: 'string', is_system_provided: true },
                   },
-                  required: ['phone'],
+                  required: [],
                 },
                 request_body_schema: null,
                 response_body_schema: null,
