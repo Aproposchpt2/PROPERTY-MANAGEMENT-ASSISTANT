@@ -401,6 +401,7 @@ CRITICAL RULES:
         },
         identify_issue: {
           label: 'Identify Issue',
+          auto_advance_after_first_response: false,
           additional_prompt: `Your ONLY task in this step: collect the caller's first name, last name, and reason for calling.
 
 DO NOT advance, DO NOT route, DO NOT end the call until you have ALL THREE:
@@ -418,27 +419,34 @@ Then wait for their response before routing forward.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
+          edge_order: ['edge_identify_to_troubleshoot', 'edge_identify_to_billing'],
         },
         troubleshoot: {
           label: 'Troubleshoot',
+          auto_advance_after_first_response: false,
           additional_prompt: `You are helping the caller with a technical issue. Get details about their problem. Do NOT end the call until you have their contact information confirmed and have set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
+          edge_order: ['edge_troubleshoot_to_resolve'],
         },
         account_billing: {
           label: 'Account & Billing',
+          auto_advance_after_first_response: false,
           additional_prompt: `You are helping the caller with an account or billing question. Gather details. Do NOT end the call until you have confirmed their contact information and set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
+          edge_order: ['edge_billing_to_resolve'],
         },
         resolve_or_escalate: {
           label: 'Resolve or Escalate',
+          auto_advance_after_first_response: false,
           additional_prompt: `Summarize what you've collected: caller name, reason for call, and any details. Confirm next steps clearly. Ask: "Is there anything else I can help you with today?" Wait for their response. ONLY call end_call after the caller has acknowledged the closing and there is nothing more to address.`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
+          edge_order: ['edge_resolve_to_end'],
         },
       },
     },
