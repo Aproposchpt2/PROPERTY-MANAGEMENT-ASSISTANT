@@ -345,19 +345,10 @@ CRITICAL RULES:
     },
     workflow: {
       edges: {
-        edge_start_to_collect: {
+        edge_start_to_end: {
           source: 'start_node',
-          target: 'collect_info',
-          forward_condition: { type: 'unconditional' },
-          backward_condition: null,
-        },
-        edge_collect_to_end: {
-          source: 'collect_info',
           target: 'end_node',
-          forward_condition: {
-            type: 'llm',
-            condition: 'The agent has collected the caller first name, last name, and reason for call, has confirmed next steps, and the caller has said goodbye or acknowledged the closing',
-          },
+          forward_condition: { type: 'unconditional' },
           backward_condition: null,
         },
       },
@@ -365,33 +356,12 @@ CRITICAL RULES:
         start_node: {
           type: 'start',
           position: { x: 0, y: 0 },
-          edge_order: ['edge_start_to_collect'],
+          edge_order: ['edge_start_to_end'],
         },
         end_node: {
           type: 'end',
-          position: { x: 0, y: 440 },
+          position: { x: 0, y: 220 },
           edge_order: [],
-        },
-        collect_info: {
-          label: 'Collect Information',
-          auto_advance_after_first_response: false,
-          additional_prompt: `Collect the caller's first name, last name, and reason for calling — one step at a time.
-
-Step 1: You already asked for first and last name. Wait for the full name.
-Step 2: Once you have the full name, ask: "And what is the reason for your call today?"
-Step 3: Wait for their full explanation of the reason.
-Step 4: Confirm: "Thank you [Name], I've noted that you're calling about [reason]. Someone from our team will follow up with you. Is there anything else before I let you go?"
-Step 5: Wait for their response. If nothing else, say a warm goodbye and THEN call end_call.
-
-RULES:
-- NEVER advance or end the call before completing all 5 steps
-- NEVER interpret a name response as a conversation ending
-- If the caller gives only a first name, ask for their last name before moving to Step 2
-- Wait patiently after every question — do not rush`,
-          additional_knowledge_base: [],
-          additional_tool_ids: [],
-          type: 'override_agent',
-          edge_order: ['edge_collect_to_end'],
         },
       },
     },
