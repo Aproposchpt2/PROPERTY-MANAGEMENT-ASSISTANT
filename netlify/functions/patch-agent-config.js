@@ -345,46 +345,19 @@ CRITICAL RULES:
     },
     workflow: {
       edges: {
-        edge_start_to_identify: {
+        edge_start_to_collect: {
           source: 'start_node',
-          target: 'identify_issue',
+          target: 'collect_info',
           forward_condition: { type: 'unconditional' },
           backward_condition: null,
         },
-        edge_identify_to_troubleshoot: {
-          source: 'identify_issue',
-          target: 'troubleshoot',
-          forward_condition: {
-            type: 'llm',
-            condition: 'The caller has a technical issue, API error, integration problem, or performance concern',
-          },
-          backward_condition: null,
-        },
-        edge_identify_to_billing: {
-          source: 'identify_issue',
-          target: 'account_billing',
-          forward_condition: {
-            type: 'llm',
-            condition: 'The caller has an account access issue, billing question, plan inquiry, or payment problem',
-          },
-          backward_condition: null,
-        },
-        edge_troubleshoot_to_resolve: {
-          source: 'troubleshoot',
-          target: 'resolve_or_escalate',
-          forward_condition: { type: 'unconditional' },
-          backward_condition: null,
-        },
-        edge_billing_to_resolve: {
-          source: 'account_billing',
-          target: 'resolve_or_escalate',
-          forward_condition: { type: 'unconditional' },
-          backward_condition: null,
-        },
-        edge_resolve_to_end: {
-          source: 'resolve_or_escalate',
+        edge_collect_to_end: {
+          source: 'collect_info',
           target: 'end_node',
-          forward_condition: { type: 'unconditional' },
+          forward_condition: {
+            type: 'llm',
+            condition: 'The agent has collected the caller first name, last name, and reason for call, has confirmed next steps, and the caller has said goodbye or acknowledged the closing',
+          },
           backward_condition: null,
         },
       },
@@ -392,61 +365,33 @@ CRITICAL RULES:
         start_node: {
           type: 'start',
           position: { x: 0, y: 0 },
-          edge_order: ['edge_start_to_identify'],
+          edge_order: ['edge_start_to_collect'],
         },
         end_node: {
           type: 'end',
-          position: { x: 0, y: 880 },
+          position: { x: 0, y: 440 },
           edge_order: [],
         },
-        identify_issue: {
-          label: 'Identify Issue',
+        collect_info: {
+          label: 'Collect Information',
           auto_advance_after_first_response: false,
-          additional_prompt: `Your ONLY task in this step: collect the caller's first name, last name, and reason for calling.
+          additional_prompt: `Collect the caller's first name, last name, and reason for calling — one step at a time.
 
-DO NOT advance, DO NOT route, DO NOT end the call until you have ALL THREE:
-- First name ✓
-- Last name ✓
-- Reason for call ✓
+Step 1: You already asked for first and last name. Wait for the full name.
+Step 2: Once you have the full name, ask: "And what is the reason for your call today?"
+Step 3: Wait for their full explanation of the reason.
+Step 4: Confirm: "Thank you [Name], I've noted that you're calling about [reason]. Someone from our team will follow up with you. Is there anything else before I let you go?"
+Step 5: Wait for their response. If nothing else, say a warm goodbye and THEN call end_call.
 
-If you only have the name and not the reason: ask "And what is the reason for your call today?" and WAIT.
-If you only have the reason and not the full name: ask for the missing name part and WAIT.
-
-NEVER call end_call in this step.
-NEVER interpret a name response as a conversation ending.
-After you have all three — confirm: "Thank you [Name], I'll make sure the team follows up with you about [reason]. Is there anything else before I let you go?"
-Then wait for their response before routing forward.`,
+RULES:
+- NEVER advance or end the call before completing all 5 steps
+- NEVER interpret a name response as a conversation ending
+- If the caller gives only a first name, ask for their last name before moving to Step 2
+- Wait patiently after every question — do not rush`,
           additional_knowledge_base: [],
           additional_tool_ids: [],
           type: 'override_agent',
-          edge_order: ['edge_identify_to_troubleshoot', 'edge_identify_to_billing'],
-        },
-        troubleshoot: {
-          label: 'Troubleshoot',
-          auto_advance_after_first_response: false,
-          additional_prompt: `You are helping the caller with a technical issue. Get details about their problem. Do NOT end the call until you have their contact information confirmed and have set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
-          additional_knowledge_base: [],
-          additional_tool_ids: [],
-          type: 'override_agent',
-          edge_order: ['edge_troubleshoot_to_resolve'],
-        },
-        account_billing: {
-          label: 'Account & Billing',
-          auto_advance_after_first_response: false,
-          additional_prompt: `You are helping the caller with an account or billing question. Gather details. Do NOT end the call until you have confirmed their contact information and set a clear expectation for follow-up. Then route to resolve_or_escalate.`,
-          additional_knowledge_base: [],
-          additional_tool_ids: [],
-          type: 'override_agent',
-          edge_order: ['edge_billing_to_resolve'],
-        },
-        resolve_or_escalate: {
-          label: 'Resolve or Escalate',
-          auto_advance_after_first_response: false,
-          additional_prompt: `Summarize what you've collected: caller name, reason for call, and any details. Confirm next steps clearly. Ask: "Is there anything else I can help you with today?" Wait for their response. ONLY call end_call after the caller has acknowledged the closing and there is nothing more to address.`,
-          additional_knowledge_base: [],
-          additional_tool_ids: [],
-          type: 'override_agent',
-          edge_order: ['edge_resolve_to_end'],
+          edge_order: ['edge_collect_to_end'],
         },
       },
     },
