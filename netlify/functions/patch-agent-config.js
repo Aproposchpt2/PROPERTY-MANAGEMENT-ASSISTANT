@@ -344,23 +344,79 @@ CRITICAL RULES:
       },
     },
     workflow: {
+      prevent_subagent_loops: false,
       edges: {
-        edge_start_to_end: {
+        edge_1801ksxsy2kwfjp8wfnhwjgc3q3t: {
           source: 'start_node',
-          target: 'end_node',
-          forward_condition: { type: 'unconditional' },
+          target: 'node_4501ksxsy2kvf1tr9nw9kzpxb567',
+          forward_condition: { label: null, type: 'unconditional' },
+          backward_condition: null,
+        },
+        edge_0301ksxsy2kyeg3ah8cg1m88fc9m: {
+          source: 'node_4501ksxsy2kvf1tr9nw9kzpxb567',
+          target: 'node_4601ksxsy2kxfhzr73yy2fdqkn33',
+          forward_condition: {
+            label: null,
+            type: 'llm',
+            condition: 'The caller explicitly asks to speak with a human agent or be transferred',
+          },
+          backward_condition: null,
+        },
+        edge_6501ksxsy2m0e3t8b2qyav5tdzgw: {
+          source: 'node_4501ksxsy2kvf1tr9nw9kzpxb567',
+          target: 'node_2101ksxsy2kzeyftc99fd2y7pw06',
+          forward_condition: {
+            label: null,
+            type: 'llm',
+            condition: 'The agent has collected the caller first name AND last name AND reason for call, has confirmed next steps with the caller, and the caller has explicitly said goodbye or acknowledged the closing statement',
+          },
           backward_condition: null,
         },
       },
       nodes: {
         start_node: {
           type: 'start',
-          position: { x: 0, y: 0 },
-          edge_order: ['edge_start_to_end'],
+          position: { x: 544, y: 64 },
+          edge_order: ['edge_1801ksxsy2kwfjp8wfnhwjgc3q3t'],
         },
-        end_node: {
+        node_4501ksxsy2kvf1tr9nw9kzpxb567: {
+          conversation_config: {
+            tts: {},
+            agent: { prompt: { built_in_tools: {} } },
+          },
+          additional_prompt: `IMPORTANT — do not end this call or advance until ALL of the following are true:
+1. You have the caller's first name
+2. You have the caller's last name
+3. You have the caller's reason for calling
+4. You have confirmed next steps with the caller
+5. The caller has said goodbye or acknowledged the closing
+
+If you have only the name and not the reason — ask: "And what is the reason for your call today?" and wait for the full answer.
+If you have only a first name — ask for the last name before moving forward.
+NEVER route to end after just receiving a name. A name alone does NOT complete this conversation.`,
+          additional_knowledge_base: [],
+          additional_tool_ids: [],
+          type: 'override_agent',
+          position: { x: 544, y: 242 },
+          edge_order: [
+            'edge_0301ksxsy2kyeg3ah8cg1m88fc9m',
+            'edge_6501ksxsy2m0e3t8b2qyav5tdzgw',
+          ],
+          label: 'Customer Support',
+          auto_advance_after_first_response: false,
+        },
+        node_4601ksxsy2kxfhzr73yy2fdqkn33: {
+          custom_sip_headers: [],
+          transfer_destination: { type: 'phone', phone_number: '+17023087429' },
+          transfer_type: 'conference',
+          post_dial_digits: null,
+          type: 'phone_number',
+          position: { x: 128, y: 420 },
+          edge_order: [],
+        },
+        node_2101ksxsy2kzeyftc99fd2y7pw06: {
           type: 'end',
-          position: { x: 0, y: 220 },
+          position: { x: 960, y: 420 },
           edge_order: [],
         },
       },
