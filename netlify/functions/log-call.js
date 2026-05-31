@@ -1,12 +1,13 @@
 'use strict';
 
 // POST /.netlify/functions/log-call
-// Called by ElevenLabs Alex agent at end of every conversation.
-// Writes to BOTH call_logs AND lead_manager_records.
+// Handles BOTH:
+//   A) ElevenLabs native post-call webhook (fires automatically after every call)
+//   B) Legacy in-conversation tool call from Alex (fallback)
 //
-// caller_phone is OPTIONAL — defaults to "Unknown".
-// The dual-write must complete regardless of what Alex captured.
-// Only auto-generated fields (timestamps, agent name) are guaranteed.
+// ElevenLabs post-call webhook payload:
+// { type: "post_call_transcription", data: { conversation_id, agent_id, status,
+//   transcript: [...], metadata: { call_duration_secs, phone_call: { caller_id } } } }
 
 const { buildCorsHeaders, handleOptions } = require('./lib/flowdesk-cors');
 const { getSupabaseAdmin } = require('./lib/flowdesk-supabase-admin');
@@ -17,6 +18,14 @@ const AGENT_NAME = 'Alex';
 
 function clean(value, max = 200) {
   return typeof value === 'string' ? value.trim().slice(0, max) : null;
+}
+
+function buildTranscriptSummary(transcript) {
+  if (!Array.isArray(transcript) || transcript.length === 0) return null;
+  return transcript
+    .map(t => `${t.role === 'agent' ? 'Alex' : 'Caller'}: ${t.message}`)
+    .join('\n')
+    .slice(0, 2000);
 }
 
 exports.handler = async (event) => {
@@ -33,15 +42,32 @@ exports.handler = async (event) => {
     return error(400, 'INVALID_BODY', 'Request body must be valid JSON', corsHeaders);
   }
 
-  // caller_phone is optional — never block on it
-  const callerPhone        = clean(body.caller_phone, 30) || 'Unknown';
-  const conversationId     = clean(body.conversation_id, 64)       || null;
-  const callerName         = clean(body.caller_name, 120)           || null;
-  const conversationSummary = clean(body.conversation_summary, 2000) || clean(body.summary, 2000) || null;
-  const durationRaw        = body.duration || body.duration_seconds;
-  const durationSecs       = Number.isFinite(Number(durationRaw)) ? Math.round(Number(durationRaw)) : null;
-  const outcome            = clean(body.outcome, 80) || null;
-  const callTimestamp      = new Date().toISOString();
+  let callerPhone, conversationId, durationSecs, outcome, conversationSummary;
+
+  // ── Detect payload type ───────────────────────────────────────
+  if (body.type === 'post_call_transcription' && body.data) {
+    // A) ElevenLabs native post-call webhook
+    const d = body.data;
+    conversationId     = clean(d.conversation_id, 64) || null;
+    durationSecs       = d.metadata?.call_duration_secs ? Math.round(Number(d.metadata.call_duration_secs)) : null;
+    callerPhone        = clean(d.metadata?.phone_call?.caller_id, 30) || 'Unknown';
+    outcome            = clean(d.status, 80) || 'completed';
+    conversationSummary = buildTranscriptSummary(d.transcript);
+
+    console.log(`LOG-CALL [post_call_webhook]: phone=***${callerPhone.slice(-4)} conv=${conversationId} dur=${durationSecs}s`);
+  } else {
+    // B) Legacy in-conversation tool call
+    callerPhone        = clean(body.caller_phone, 30) || 'Unknown';
+    conversationId     = clean(body.conversation_id, 64) || null;
+    const durationRaw  = body.duration || body.duration_seconds;
+    durationSecs       = Number.isFinite(Number(durationRaw)) ? Math.round(Number(durationRaw)) : null;
+    outcome            = clean(body.outcome, 80) || null;
+    conversationSummary = clean(body.conversation_summary, 2000) || clean(body.summary, 2000) || null;
+
+    console.log(`LOG-CALL [tool_call]: phone=***${callerPhone.slice(-4)} conv=${conversationId}`);
+  }
+
+  const callTimestamp = new Date().toISOString();
 
   let supabase;
   try {
@@ -50,7 +76,7 @@ exports.handler = async (event) => {
     return error(500, 'CONFIG_ERROR', 'Service configuration error', corsHeaders);
   }
 
-  // Write to both tables in parallel — non-fatal if one fails
+  // ── Write to both tables in parallel ─────────────────────────
   const [callLogResult, leadResult] = await Promise.allSettled([
 
     // 1. call_logs
@@ -59,7 +85,7 @@ exports.handler = async (event) => {
       call_sid:         conversationId,
       call_status:      'completed',
       duration_seconds: durationSecs,
-      outcome:          outcome,
+      outcome:          outcome || 'completed',
       lead_created:     true,
       is_demo:          false,
       created_at:       callTimestamp,
@@ -69,7 +95,6 @@ exports.handler = async (event) => {
     supabase.from('lead_manager_records').insert({
       tenant_id:             TENANT_ID,
       phone:                 callerPhone,
-      contact_name:          callerName,
       call_sid:              conversationId,
       source:                'voice_agent',
       source_page:           'ElevenLabs Alex Voice Agent',
@@ -82,6 +107,7 @@ exports.handler = async (event) => {
       callback_needed:       false,
       ai_processed:          false,
       ai_call_summary:       conversationSummary,
+      transcript:            conversationSummary,
       campaign_source:       'voice_agent',
       campaign_medium:       'phone',
       campaign_name:         'FlowDesk Pro Contact Center',
@@ -90,32 +116,27 @@ exports.handler = async (event) => {
       created_at:            callTimestamp,
       updated_at:            callTimestamp,
       metadata: {
-        conversation_id: conversationId,
-        agent:           AGENT_NAME,
-        platform:        'ElevenLabs',
+        conversation_id:       conversationId,
+        agent:                 AGENT_NAME,
+        platform:              'ElevenLabs',
         caller_phone_captured: callerPhone !== 'Unknown',
+        webhook_type:          body.type === 'post_call_transcription' ? 'post_call' : 'tool_call',
       },
     }).select('id, phone, lead_status, created_at').single(),
 
   ]);
 
-  const callLog = callLogResult.status === 'fulfilled' ? callLogResult.value.data  : null;
-  const leadRec = leadResult.status    === 'fulfilled' ? leadResult.value.data     : null;
+  const callLog = callLogResult.status === 'fulfilled' ? callLogResult.value.data : null;
+  const leadRec = leadResult.status    === 'fulfilled' ? leadResult.value.data    : null;
 
-  if (callLogResult.status === 'rejected') {
-    console.error('LOG-CALL call_logs error:', callLogResult.reason?.message);
-  }
-  if (leadResult.status === 'rejected') {
-    console.error('LOG-CALL lead_manager_records error:', leadResult.reason?.message);
-  }
+  if (callLogResult.status === 'rejected') console.error('LOG-CALL call_logs error:', callLogResult.reason?.message);
+  if (leadResult.status    === 'rejected') console.error('LOG-CALL lead_manager_records error:', leadResult.reason?.message);
 
-  const phoneCaptured = callerPhone !== 'Unknown';
-  console.log(`LOG-CALL: phone=${phoneCaptured ? `***${callerPhone.slice(-4)}` : 'Unknown'} call_log_id=${callLog?.id} lead_id=${leadRec?.id}`);
+  console.log(`LOG-CALL: call_log_id=${callLog?.id} lead_id=${leadRec?.id}`);
 
   return json(200, {
-    success:      true,
-    call_log:     callLog,
-    lead_record:  leadRec,
-    phone_captured: phoneCaptured,
+    success:     true,
+    call_log:    callLog,
+    lead_record: leadRec,
   }, corsHeaders);
 };

@@ -156,6 +156,49 @@ exports.handler = async (event) => {
 
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false }) };
 
+  // PUT ?action=register_webhook — register post-call webhook and patch agent
+  const qs = event.queryStringParameters || {};
+  if (qs.action === 'register_webhook') {
+    try {
+      const webhookUrl = 'https://ai4contact-center.netlify.app/.netlify/functions/log-call';
+
+      // Step 1: Create webhook in ElevenLabs
+      const createResult = await httpsRequest('POST',
+        'https://api.elevenlabs.io/v1/convai/webhooks',
+        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        { url: webhookUrl, name: 'FlowDesk Pro Log Call' }
+      );
+
+      if (createResult.status < 200 || createResult.status >= 300) {
+        return { statusCode: 502, headers: cors, body: JSON.stringify({ ok: false, error: 'Webhook create failed', detail: createResult.body }) };
+      }
+
+      const webhook = JSON.parse(createResult.body);
+      const webhookId = webhook.webhook_id || webhook.id;
+      console.log('Webhook registered:', webhookId);
+
+      // Step 2: Patch agent with post_call_webhook_id
+      const patchResult = await httpsRequest('PATCH',
+        `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
+        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        { platform_settings: { workspace_overrides: { webhooks: { post_call_webhook_id: webhookId } } } }
+      );
+
+      if (patchResult.status < 200 || patchResult.status >= 300) {
+        return { statusCode: 502, headers: cors, body: JSON.stringify({ ok: false, error: 'Agent patch failed', detail: patchResult.body }) };
+      }
+
+      return { statusCode: 200, headers: cors, body: JSON.stringify({
+        ok: true,
+        webhook_id: webhookId,
+        webhook_url: webhookUrl,
+        message: 'Post-call webhook registered and agent patched — every call will now auto-log to Supabase',
+      }) };
+    } catch (err) {
+      return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: err.message }) };
+    }
+  }
+
   const SYSTEM_PROMPT = `You are Alex, a patient and professional support specialist at FlowDesk Pro.
 
 Your ONLY job on this call:
