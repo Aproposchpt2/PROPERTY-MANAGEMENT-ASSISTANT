@@ -173,7 +173,7 @@ CRITICAL RULES:
 - Cellular callers may have audio gaps mid-sentence — these are NOT end-of-turn signals
 - Single words like 'yes', 'okay', 'sure', 'thanks', 'um', 'uh' are NOT call endings
 - If you have only the name and not the reason for call, keep the call going
-- After collecting all information: thank them, confirm next steps, then call end_call`;
+- After collecting all information: thank them, confirm next steps, then say "Thanks for calling FlowDesk Pro" and THEN call end_call`;
 
   const payload = {
     conversation_config: {
@@ -384,7 +384,9 @@ CRITICAL RULES:
             tts: {},
             agent: { prompt: { built_in_tools: {} } },
           },
-          additional_prompt: `IMPORTANT — do not end this call or advance until ALL of the following are true:
+          additional_prompt: `Closing line: always say "Thanks for calling FlowDesk Pro, have a great day!" before calling end_call.
+
+IMPORTANT — do not end this call or advance until ALL of the following are true:
 1. You have the caller's first name
 2. You have the caller's last name
 3. You have the caller's reason for calling
