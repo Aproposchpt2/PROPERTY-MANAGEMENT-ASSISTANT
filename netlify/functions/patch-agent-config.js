@@ -464,16 +464,7 @@ CRITICAL RULES:
           },
           backward_condition: null,
         },
-        edge_6501ksxsy2m0e3t8b2qyav5tdzgw: {
-          source: 'node_4501ksxsy2kvf1tr9nw9kzpxb567',
-          target: 'node_2101ksxsy2kzeyftc99fd2y7pw06',
-          forward_condition: {
-            label: null,
-            type: 'llm',
-            condition: 'The agent has collected the caller first name AND last name AND reason for call, has confirmed next steps with the caller, and the caller has explicitly said goodbye or acknowledged the closing statement',
-          },
-          backward_condition: null,
-        },
+        // edge_6501 REMOVED — end_call tool handles termination so LLM can call log_call first
       },
       nodes: {
         start_node: {
@@ -509,7 +500,6 @@ NEVER route to end after just receiving a name. A name alone does NOT complete t
           position: { x: 544, y: 242 },
           edge_order: [
             'edge_0301ksxsy2kyeg3ah8cg1m88fc9m',
-            'edge_6501ksxsy2m0e3t8b2qyav5tdzgw',
           ],
           label: 'Customer Support',
           auto_advance_after_first_response: false,
