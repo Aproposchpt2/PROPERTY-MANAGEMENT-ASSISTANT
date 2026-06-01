@@ -101,14 +101,20 @@ async function fetchConversationDetail(apiKey, conversationId) {
 }
 
 async function processConversation(supabase, conv, apiKey) {
-  const conversationId = conv.conversation_id;
+  // ElevenLabs API returns conversation_id at top level
+  const conversationId = conv.conversation_id || conv.id || null;
+
+  if (!conversationId) {
+    console.log('[sync] Skipping conversation with no ID:', JSON.stringify(conv).slice(0, 100));
+    return false;
+  }
 
   // Check if already synced
   const { data: existing } = await supabase
     .from('call_logs')
     .select('id')
     .eq('call_sid', conversationId)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     console.log(`[sync] Already synced: ${conversationId}`);
@@ -117,10 +123,28 @@ async function processConversation(supabase, conv, apiKey) {
 
   // Fetch full conversation detail for transcript + data collection
   const detail = await fetchConversationDetail(apiKey, conversationId);
+
+  // Log the detail structure once for debugging
+  if (detail) {
+    console.log('[sync] Detail keys:', Object.keys(detail).join(', '));
+    if (detail.metadata) console.log('[sync] Metadata keys:', Object.keys(detail.metadata).join(', '));
+  }
+
   const transcript = detail?.transcript || conv.transcript || [];
   const collected  = detail?.data_collection_results || {};
-  const metadata   = detail?.conversation_initiation_client_data?.metadata || {};
-  const callerPhone = clean(metadata.phone_number || conv.metadata?.phone_number || conv.caller_id || 'Unknown', 30);
+
+  // Phone number: try multiple locations in the response
+  const callerPhone = clean(
+    detail?.metadata?.phone_number ||
+    detail?.metadata?.caller_id ||
+    detail?.call_metadata?.caller_phone_number ||
+    conv.metadata?.phone_number ||
+    conv.metadata?.caller_id ||
+    conv.caller_id ||
+    conv.caller_phone ||
+    'Unknown',
+    30
+  );
   const durationSecs = conv.call_duration_secs ? Math.round(conv.call_duration_secs) : null;
   const startedAt  = conv.start_time_unix_secs ? new Date(conv.start_time_unix_secs * 1000).toISOString() : new Date().toISOString();
 
@@ -149,7 +173,7 @@ async function processConversation(supabase, conv, apiKey) {
 
     supabase.from('lead_manager_records').insert({
       tenant_id:             TENANT_ID,
-      contact_name:          contactName || `Voice Lead — ${callerPhone}`,
+      contact_name:          contactName || `Voice Lead — ${callerPhone !== 'Unknown' ? callerPhone : conversationId?.slice(-8) || 'Unknown'}`,
       first_name:            firstName,
       last_name:             lastName,
       phone:                 callerPhone,
