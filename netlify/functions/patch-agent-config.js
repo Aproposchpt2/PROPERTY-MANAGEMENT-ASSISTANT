@@ -175,7 +175,7 @@ exports.handler = async (event) => {
 
       for (const endpoint of endpoints) {
         const r = await httpsRequest('POST', endpoint, elHeaders,
-          { url: webhookUrl, name: 'FlowDesk Pro Log Call', events: ['post_call_transcription'] }
+          { url: webhookUrl, name: 'FlowDesk Pro Log Call', events: ['transcript'] }
         );
         if (r.status >= 200 && r.status < 300) {
           const data = JSON.parse(r.body);
@@ -193,8 +193,9 @@ exports.handler = async (event) => {
           elHeaders,
           { platform_settings: { workspace_overrides: { webhooks: {
             post_call_webhook_url: webhookUrl,
-            events: ['post_call_transcription'],
+            events: ['transcript'],
             transcript_format: 'json',
+            send_audio: false,
           } } } }
         );
         if (directPatch.status >= 200 && directPatch.status < 300) {
