@@ -360,15 +360,15 @@ CRITICAL RULES:
                 auth_connection: null,
               },
             },
-            // Restore end_call system tool
+            // end_call — force speech before hangup so goodbye plays fully
             {
               type: 'system',
               name: 'end_call',
-              description: 'End the call. Only call this when the conversation is fully complete.',
+              description: 'End the call. Only call this after saying the full goodbye phrase.',
               response_timeout_secs: 20,
-              disable_interruptions: false,
-              force_pre_tool_speech: false,
-              pre_tool_speech: 'auto',
+              disable_interruptions: true,
+              force_pre_tool_speech: true,
+              pre_tool_speech: 'Thanks for calling FlowDesk Pro, have a great day!',
               assignments: [],
               tool_call_sound: null,
               tool_call_sound_behavior: 'auto',
