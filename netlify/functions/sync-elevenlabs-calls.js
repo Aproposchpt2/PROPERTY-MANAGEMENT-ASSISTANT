@@ -218,9 +218,6 @@ exports.handler = async (event) => {
   try { supabase = getSupabaseAdmin(); }
   catch (e) { return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ ok: false, error: e.message }) }; }
 
-  // Ensure sync cursor table exists
-  await supabase.rpc('create_sync_cursor_if_not_exists').catch(() => null);
-
   const lastSyncedAt = await getLastSyncedAt(supabase);
   console.log(`[sync] Syncing conversations after: ${lastSyncedAt}`);
 
