@@ -227,6 +227,15 @@ CRITICAL RULES:
         user_input_audio_format: 'pcm_16000',
         keywords: [],
       },
+      tts: {
+        model_id: 'eleven_v3_conversational',
+        voice_id: '7EzWGsX10sAS4c9m9cPf',
+        optimize_streaming_latency: 4,
+        stability: 0.4,
+        speed: 1.05,
+        similarity_boost: 0.8,
+        agent_output_audio_format: 'pcm_16000',
+      },
       turn: {
         turn_timeout: 20,
         silence_end_call_timeout: -1,
