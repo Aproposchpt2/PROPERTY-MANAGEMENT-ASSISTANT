@@ -9,12 +9,36 @@
 // { type: "post_call_transcription", data: { conversation_id, agent_id, status,
 //   transcript: [...], metadata: { call_duration_secs, phone_call: { caller_id } } } }
 
+const crypto = require('crypto');
 const { buildCorsHeaders, handleOptions } = require('./lib/flowdesk-cors');
 const { getSupabaseAdmin } = require('./lib/flowdesk-supabase-admin');
 const { json, error, parseJsonBody } = require('./lib/flowdesk-response-utils');
 
 const TENANT_ID  = process.env.CLIENT_TENANT_ID || 'apropos-ai4-businesses';
 const AGENT_NAME = 'Alex';
+
+function verifyElevenLabsSignature(event) {
+  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
+  if (!secret) return true; // skip verification if secret not configured
+
+  // ElevenLabs uses Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature
+  const msgId        = event.headers['webhook-id']        || event.headers['svix-id']        || '';
+  const msgTimestamp = event.headers['webhook-timestamp'] || event.headers['svix-timestamp'] || '';
+  const msgSignature = event.headers['webhook-signature'] || event.headers['svix-signature'] || '';
+
+  if (!msgId || !msgTimestamp || !msgSignature) return false;
+
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body || '', 'base64').toString('utf8')
+    : (event.body || '');
+
+  const signedContent = `${msgId}.${msgTimestamp}.${rawBody}`;
+  const secretBytes  = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const computed     = crypto.createHmac('sha256', secretBytes).update(signedContent).digest('base64');
+  const expected     = `v1,${computed}`;
+
+  return msgSignature.split(' ').some(sig => sig === expected);
+}
 
 function clean(value, max = 200) {
   return typeof value === 'string' ? value.trim().slice(0, max) : null;
@@ -35,6 +59,12 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return handleOptions(origin);
   if (event.httpMethod !== 'POST') {
     return error(405, 'METHOD_NOT_ALLOWED', 'Only POST is supported', corsHeaders);
+  }
+
+  // Verify ElevenLabs webhook signature if secret is configured
+  if (!verifyElevenLabsSignature(event)) {
+    console.error('LOG-CALL: invalid webhook signature');
+    return error(401, 'UNAUTHORIZED', 'Invalid webhook signature', corsHeaders);
   }
 
   const body = parseJsonBody(event);
