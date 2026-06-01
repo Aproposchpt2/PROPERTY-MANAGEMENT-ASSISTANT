@@ -83,28 +83,39 @@ exports.handler = async (event) => {
   }
 
   let callerPhone, conversationId, durationSecs, outcome, conversationSummary;
+  let callerFirstName, callerLastName, reasonForCall, contactName;
 
   // ── Detect payload type ───────────────────────────────────────
   if (body.type === 'post_call_transcription' && body.data) {
     // A) ElevenLabs native post-call webhook
     const d = body.data;
-    conversationId     = clean(d.conversation_id, 64) || null;
-    durationSecs       = d.metadata?.call_duration_secs ? Math.round(Number(d.metadata.call_duration_secs)) : null;
-    callerPhone        = clean(d.metadata?.phone_call?.caller_id, 30) || 'Unknown';
-    outcome            = clean(d.status, 80) || 'completed';
+    conversationId      = clean(d.conversation_id, 64) || null;
+    durationSecs        = d.metadata?.call_duration_secs ? Math.round(Number(d.metadata.call_duration_secs)) : null;
+    callerPhone         = clean(d.metadata?.phone_call?.caller_id, 30) || 'Unknown';
+    outcome             = clean(d.status, 80) || 'completed';
     conversationSummary = buildTranscriptSummary(d.transcript);
+    // Extract collected data from post-call data collection if available
+    const collected     = d.data_collection_results || {};
+    callerFirstName     = clean(collected.caller_first_name?.value, 60) || null;
+    callerLastName      = clean(collected.caller_last_name?.value, 60) || null;
+    reasonForCall       = clean(collected.reason_for_call?.value, 500) || null;
+    contactName         = [callerFirstName, callerLastName].filter(Boolean).join(' ') || null;
 
-    console.log(`LOG-CALL [post_call_webhook]: phone=***${callerPhone.slice(-4)} conv=${conversationId} dur=${durationSecs}s`);
+    console.log(`LOG-CALL [post_call_webhook]: phone=***${callerPhone.slice(-4)} name="${contactName}" reason="${reasonForCall?.slice(0,40)}"`);
   } else {
-    // B) Legacy in-conversation tool call
-    callerPhone        = clean(body.caller_phone, 30) || 'Unknown';
-    conversationId     = clean(body.conversation_id, 64) || null;
-    const durationRaw  = body.duration || body.duration_seconds;
-    durationSecs       = Number.isFinite(Number(durationRaw)) ? Math.round(Number(durationRaw)) : null;
-    outcome            = clean(body.outcome, 80) || null;
+    // B) In-conversation tool call — Alex collected the fields manually
+    callerPhone         = clean(body.caller_phone, 30) || 'Unknown';
+    callerFirstName     = clean(body.caller_first_name, 60) || null;
+    callerLastName      = clean(body.caller_last_name, 60) || null;
+    reasonForCall       = clean(body.reason_for_call, 500) || null;
+    contactName         = [callerFirstName, callerLastName].filter(Boolean).join(' ') || null;
+    conversationId      = clean(body.conversation_id, 64) || null;
+    const durationRaw   = body.duration || body.duration_seconds;
+    durationSecs        = Number.isFinite(Number(durationRaw)) ? Math.round(Number(durationRaw)) : null;
+    outcome             = clean(body.outcome, 80) || null;
     conversationSummary = clean(body.conversation_summary, 2000) || clean(body.summary, 2000) || null;
 
-    console.log(`LOG-CALL [tool_call]: phone=***${callerPhone.slice(-4)} conv=${conversationId}`);
+    console.log(`LOG-CALL [tool_call]: phone=***${callerPhone.slice(-4)} name="${contactName}" reason="${reasonForCall?.slice(0,40)}"`);
   }
 
   const callTimestamp = new Date().toISOString();
@@ -131,15 +142,23 @@ exports.handler = async (event) => {
       created_at:       callTimestamp,
     }).select('id, caller_phone, call_status, created_at').single(),
 
-    // 2. lead_manager_records
+    // 2. lead_manager_records — fully populated with collected caller data
     supabase.from('lead_manager_records').insert({
       tenant_id:             TENANT_ID,
+      contact_name:          contactName || `Voice Lead — ${callerPhone}`,
+      first_name:            callerFirstName || null,
+      last_name:             callerLastName || null,
       phone:                 callerPhone,
       call_sid:              conversationId,
       source:                'voice_agent',
-      source_page:           'ElevenLabs Alex Voice Agent',
+      source_page:           'ElevenLabs Alex — Contact Center',
       channel:               'phone',
-      lead_status:           'New / Needs Review',
+      lead_status:           reasonForCall ? 'New / Needs Review' : 'New / Priority Review',
+      service_needed:        reasonForCall || 'Inbound call — reason not captured',
+      message:               reasonForCall || null,
+      details:               reasonForCall
+                               ? `${contactName || 'Caller'} called about: ${reasonForCall}`
+                               : conversationSummary || `Inbound call handled by ${AGENT_NAME}. Phone: ${callerPhone}.`,
       call_status:           'completed',
       call_duration_seconds: durationSecs,
       missed_call:           false,
@@ -151,8 +170,9 @@ exports.handler = async (event) => {
       campaign_source:       'voice_agent',
       campaign_medium:       'phone',
       campaign_name:         'FlowDesk Pro Contact Center',
-      details:               conversationSummary || `Inbound call handled by ${AGENT_NAME}. Phone: ${callerPhone}.`,
-      next_action:           'Review call record and follow up with caller.',
+      next_action:           reasonForCall
+                               ? `Follow up with ${contactName || 'caller'} regarding: ${reasonForCall.slice(0,100)}`
+                               : 'Review call record and follow up with caller.',
       created_at:            callTimestamp,
       updated_at:            callTimestamp,
       metadata: {
