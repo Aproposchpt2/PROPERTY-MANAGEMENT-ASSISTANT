@@ -164,6 +164,25 @@ exports.handler = async (event) => {
       const webhookUrl = 'https://ai4contact-center.netlify.app/.netlify/functions/log-call';
       const elHeaders  = { 'xi-api-key': apiKey, 'Content-Type': 'application/json' };
 
+      // If a webhook_id was passed directly, use it immediately
+      if (qs.webhook_id) {
+        const patchResult = await httpsRequest('PATCH',
+          `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
+          elHeaders,
+          { platform_settings: { workspace_overrides: { webhooks: { post_call_webhook_id: qs.webhook_id } } } }
+        );
+        if (patchResult.status >= 200 && patchResult.status < 300) {
+          return { statusCode: 200, headers: cors, body: JSON.stringify({
+            ok: true, webhook_id: qs.webhook_id,
+            agent_patched: true,
+            message: `Agent patched with post_call_webhook_id: ${qs.webhook_id}`,
+          }) };
+        }
+        return { statusCode: 502, headers: cors, body: JSON.stringify({
+          ok: false, error: 'Agent patch failed', detail: patchResult.body.slice(0, 300),
+        }) };
+      }
+
       // Try known ElevenLabs webhook endpoints
       const endpoints = [
         'https://api.elevenlabs.io/v1/convai/webhooks',
