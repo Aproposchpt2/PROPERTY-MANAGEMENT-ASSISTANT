@@ -368,7 +368,7 @@ CRITICAL RULES:
               response_timeout_secs: 20,
               disable_interruptions: true,
               force_pre_tool_speech: true,
-              pre_tool_speech: 'Thanks for calling FlowDesk Pro, have a great day!',
+              pre_tool_speech: 'force',
               assignments: [],
               tool_call_sound: null,
               tool_call_sound_behavior: 'auto',
