@@ -261,11 +261,18 @@ exports.handler = async (event) => {
   // Update cursor to now
   await updateLastSyncedAt(supabase, new Date().toISOString());
 
+  // Include first raw conversation for structure debugging
+  const sample = conversations[0] ? {
+    keys: Object.keys(conversations[0]),
+    sample: JSON.stringify(conversations[0]).slice(0, 500)
+  } : null;
+
   return json(200, {
     ok: true,
     synced,
     checked: conversations.length,
     last_synced_after: lastSyncedAt,
     message: `Synced ${synced} new call(s) from ElevenLabs`,
+    debug_sample: sample,
   }, corsHeaders);
 };
