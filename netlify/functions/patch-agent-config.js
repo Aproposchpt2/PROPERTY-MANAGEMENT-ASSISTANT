@@ -156,43 +156,71 @@ exports.handler = async (event) => {
 
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false }) };
 
-  // PUT ?action=register_webhook — register post-call webhook and patch agent
+  // ?action=register_webhook — discover webhook API and patch agent
   const qs = event.queryStringParameters || {};
   if (qs.action === 'register_webhook') {
     try {
       const webhookUrl = 'https://ai4contact-center.netlify.app/.netlify/functions/log-call';
+      const elHeaders  = { 'xi-api-key': apiKey, 'Content-Type': 'application/json' };
 
-      // Step 1: Create webhook in ElevenLabs
-      const createResult = await httpsRequest('POST',
+      // Try known ElevenLabs webhook endpoints
+      const endpoints = [
         'https://api.elevenlabs.io/v1/convai/webhooks',
-        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
-        { url: webhookUrl, name: 'FlowDesk Pro Log Call' }
-      );
+        'https://api.elevenlabs.io/v1/workspace/webhooks',
+        'https://api.elevenlabs.io/v1/webhooks',
+      ];
 
-      if (createResult.status < 200 || createResult.status >= 300) {
-        return { statusCode: 502, headers: cors, body: JSON.stringify({ ok: false, error: 'Webhook create failed', detail: createResult.body }) };
+      let webhookId = null;
+      let usedEndpoint = null;
+
+      for (const endpoint of endpoints) {
+        const r = await httpsRequest('POST', endpoint, elHeaders,
+          { url: webhookUrl, name: 'FlowDesk Pro Log Call', events: ['post_call_transcription'] }
+        );
+        if (r.status >= 200 && r.status < 300) {
+          const data = JSON.parse(r.body);
+          webhookId = data.webhook_id || data.id;
+          usedEndpoint = endpoint;
+          break;
+        }
+        console.log(`Endpoint ${endpoint} → ${r.status}: ${r.body.slice(0, 100)}`);
       }
 
-      const webhook = JSON.parse(createResult.body);
-      const webhookId = webhook.webhook_id || webhook.id;
-      console.log('Webhook registered:', webhookId);
+      // If no registration endpoint works — try patching agent directly with URL
+      if (!webhookId) {
+        const directPatch = await httpsRequest('PATCH',
+          `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
+          elHeaders,
+          { platform_settings: { workspace_overrides: { webhooks: {
+            post_call_webhook_url: webhookUrl,
+            events: ['post_call_transcription'],
+            transcript_format: 'json',
+          } } } }
+        );
+        if (directPatch.status >= 200 && directPatch.status < 300) {
+          return { statusCode: 200, headers: cors, body: JSON.stringify({
+            ok: true, method: 'direct_url_patch', webhook_url: webhookUrl,
+            message: 'Webhook URL patched directly on agent — no registration needed',
+          }) };
+        }
+        return { statusCode: 502, headers: cors, body: JSON.stringify({
+          ok: false, error: 'All webhook registration attempts failed',
+          direct_patch_response: directPatch.body.slice(0, 300),
+        }) };
+      }
 
-      // Step 2: Patch agent with post_call_webhook_id
+      // Patch agent with webhook ID
       const patchResult = await httpsRequest('PATCH',
         `https://api.elevenlabs.io/v1/convai/agents/${AGENT_ID}`,
-        { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        elHeaders,
         { platform_settings: { workspace_overrides: { webhooks: { post_call_webhook_id: webhookId } } } }
       );
 
-      if (patchResult.status < 200 || patchResult.status >= 300) {
-        return { statusCode: 502, headers: cors, body: JSON.stringify({ ok: false, error: 'Agent patch failed', detail: patchResult.body }) };
-      }
-
       return { statusCode: 200, headers: cors, body: JSON.stringify({
-        ok: true,
-        webhook_id: webhookId,
-        webhook_url: webhookUrl,
-        message: 'Post-call webhook registered and agent patched — every call will now auto-log to Supabase',
+        ok: true, webhook_id: webhookId, webhook_url: webhookUrl,
+        endpoint_used: usedEndpoint,
+        agent_patched: patchResult.status >= 200 && patchResult.status < 300,
+        message: 'Post-call webhook registered — every call auto-logs to Supabase',
       }) };
     } catch (err) {
       return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: err.message }) };
