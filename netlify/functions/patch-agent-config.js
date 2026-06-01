@@ -146,6 +146,7 @@ exports.handler = async (event) => {
           label: p.label,
           agent_assigned: p.assigned_agent?.agent_name,
         })),
+        post_call_webhook: a?.platform_settings?.workspace_overrides?.webhooks || null,
       };
 
       return { statusCode: 200, headers: cors, body: JSON.stringify(report, null, 2) };
