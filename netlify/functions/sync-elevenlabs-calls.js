@@ -124,34 +124,38 @@ async function processConversation(supabase, conv, apiKey) {
   // Fetch full conversation detail for transcript + data collection
   const detail = await fetchConversationDetail(apiKey, conversationId);
 
-  // Log the detail structure once for debugging
+  // Log detail structure for phone number field discovery
   if (detail) {
     console.log('[sync] Detail keys:', Object.keys(detail).join(', '));
-    if (detail.metadata) console.log('[sync] Metadata keys:', Object.keys(detail.metadata).join(', '));
+    if (detail.metadata) console.log('[sync] Metadata:', JSON.stringify(detail.metadata).slice(0, 200));
+    if (detail.conversation_initiation_client_data) console.log('[sync] Initiation data:', JSON.stringify(detail.conversation_initiation_client_data).slice(0, 200));
   }
 
   const transcript = detail?.transcript || conv.transcript || [];
   const collected  = detail?.data_collection_results || {};
 
-  // Phone number: try multiple locations in the response
+  // Phone number: search full detail object for phone/caller fields
   const callerPhone = clean(
     detail?.metadata?.phone_number ||
     detail?.metadata?.caller_id ||
+    detail?.metadata?.caller_phone_number ||
     detail?.call_metadata?.caller_phone_number ||
-    conv.metadata?.phone_number ||
-    conv.metadata?.caller_id ||
+    detail?.conversation_initiation_client_data?.metadata?.phone_number ||
+    detail?.conversation_initiation_client_data?.conversation?.phone_number ||
     conv.caller_id ||
-    conv.caller_phone ||
     'Unknown',
     30
   );
+
+  // call_summary_title from list is the best available reason for call
+  const summaryTitle = clean(conv.call_summary_title || conv.transcript_summary, 300);
   const durationSecs = conv.call_duration_secs ? Math.round(conv.call_duration_secs) : null;
   const startedAt  = conv.start_time_unix_secs ? new Date(conv.start_time_unix_secs * 1000).toISOString() : new Date().toISOString();
 
-  // Extract data-collected fields
+  // Extract data-collected fields from conversation detail
   const firstName  = clean(collected.caller_first_name?.value, 60) || null;
   const lastName   = clean(collected.caller_last_name?.value, 60) || null;
-  const reason     = clean(collected.reason_for_call?.value, 500) || null;
+  const reason     = clean(collected.reason_for_call?.value, 500) || summaryTitle || null;
   const contactName = [firstName, lastName].filter(Boolean).join(' ') || null;
   const summary    = buildTranscriptSummary(transcript);
 
