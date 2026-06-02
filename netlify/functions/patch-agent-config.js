@@ -329,7 +329,7 @@ CRITICAL RULES:
               execution_mode: 'immediate',
               api_schema: {
                 request_headers: {},
-                url: 'https://ai4contact-center.netlify.app/.netlify/functions/log-call',
+                url: 'https://lead-management.aiflowdeskpro.com/.netlify/functions/log-call',
                 method: 'POST',
                 path_params_schema: {},
                 query_params_schema: null,
@@ -338,8 +338,8 @@ CRITICAL RULES:
                   required: [],
                   description: 'Log call data at end of conversation.',
                   properties: {
-                    caller_phone: { type: 'string', is_system_provided: true },
-                    conversation_id: { type: 'string', is_system_provided: true },
+                    caller_phone: { type: 'string', value_type: 'dynamic_variable', dynamic_variable: 'system__caller_id' },
+                    conversation_id: { type: 'string', value_type: 'dynamic_variable', dynamic_variable: 'system__conversation_id' },
                   },
                 },
                 response_body_schema: null,
@@ -364,12 +364,12 @@ CRITICAL RULES:
               execution_mode: 'immediate',
               api_schema: {
                 request_headers: {},
-                url: 'https://ai4contact-center.netlify.app/.netlify/functions/lookup-caller',
+                url: 'https://lead-management.aiflowdeskpro.com/.netlify/functions/lookup-caller',
                 method: 'GET',
                 path_params_schema: {},
                 query_params_schema: {
                   properties: {
-                    phone: { type: 'string', is_system_provided: true },
+                    phone: { type: 'string', value_type: 'dynamic_variable', dynamic_variable: 'system__caller_id' },
                   },
                   required: [],
                 },
