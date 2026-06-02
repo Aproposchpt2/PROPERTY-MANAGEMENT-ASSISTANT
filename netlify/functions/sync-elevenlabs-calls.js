@@ -214,10 +214,18 @@ async function processConversation(supabase, conv, apiKey) {
     }).select('id').single(),
   ]);
 
-  if (callLogResult.status === 'rejected') console.error('[sync] call_logs error:', callLogResult.reason?.message);
-  if (leadResult.status    === 'rejected') console.error('[sync] lead_manager_records error:', leadResult.reason?.message);
+  const callLogErr = callLogResult.status === 'rejected'
+    ? (callLogResult.reason?.message || JSON.stringify(callLogResult.reason))
+    : (callLogResult.value?.error?.message || null);
+  const leadErr = leadResult.status === 'rejected'
+    ? (leadResult.reason?.message || JSON.stringify(leadResult.reason))
+    : (leadResult.value?.error?.message || null);
 
-  return true;
+  if (callLogErr) console.error('[sync] call_logs error:', callLogErr);
+  if (leadErr)    console.error('[sync] lead_manager_records error:', leadErr);
+
+  // Return errors for debugging
+  return { wasNew: true, callLogErr, leadErr, conversationId, callerPhone };
 }
 
 exports.handler = async (event) => {
@@ -253,12 +261,19 @@ exports.handler = async (event) => {
   console.log(`[sync] Found ${conversations.length} new conversations`);
 
   let synced = 0;
+  const errors = [];
   for (const conv of conversations) {
     try {
-      const wasNew = await processConversation(supabase, conv, apiKey);
-      if (wasNew) synced++;
+      const result = await processConversation(supabase, conv, apiKey);
+      if (result?.wasNew) {
+        synced++;
+        if (result.callLogErr || result.leadErr) {
+          errors.push({ id: result.conversationId, callLogErr: result.callLogErr, leadErr: result.leadErr });
+        }
+      }
     } catch (err) {
       console.error('[sync] processConversation error:', err.message);
+      errors.push({ error: err.message });
     }
   }
 
@@ -277,6 +292,7 @@ exports.handler = async (event) => {
     checked: conversations.length,
     last_synced_after: lastSyncedAt,
     message: `Synced ${synced} new call(s) from ElevenLabs`,
+    errors: errors.length > 0 ? errors.slice(0, 3) : undefined,
     debug_sample: sample,
   }, corsHeaders);
 };
