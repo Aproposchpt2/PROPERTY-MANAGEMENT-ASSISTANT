@@ -70,6 +70,14 @@ img{display:block;max-width:100%}
 .nav-cta:hover{transform:translateY(-2px);box-shadow:0 0 44px rgba(74,127,255,.52)}
 
 /* HERO */
+.hero-product-logo{margin-bottom:1.8rem}
+.hero-product-logo img{
+  width:100%;max-width:600px;height:auto;
+  display:block;object-fit:contain;
+  filter:drop-shadow(0 0 40px rgba(74,127,255,0.3));
+}
+@media(max-width:991px){.hero-product-logo img{max-width:400px}}
+@media(max-width:640px){.hero-product-logo img{max-width:260px}}
 .hero{
   display:grid;grid-template-columns:minmax(0,1.1fr) minmax(340px,.9fr);
   gap:clamp(2rem,5vw,5rem);align-items:center;
@@ -271,7 +279,7 @@ footer{
   <nav class="nav">
     <a class="brand" href="https://aiflowdeskpro.com">
       <div class="brand-mark">
-        <img src="AI4-FLOWDESK-PRO-LOGO.png" alt="FlowDesk Pro" />
+        <img src="https://aiflowdeskpro.com/AI4-FLOWDESK-PRO-LOGO.png" alt="FlowDesk Pro" />
       </div>
       <div class="brand-name">
         FlowDesk Pro
@@ -289,6 +297,9 @@ footer{
   <!-- HERO -->
   <section class="hero">
     <div>
+      <div class="hero-product-logo">
+        <img src="https://aiflowdeskpro.com/AI4-FLOWDESK-PRO-LOGO.png" alt="AI4 FlowDesk Pro" />
+      </div>
       <div class="eyebrow">AI Contact Center · Enterprise Grade</div>
       <h1>Every customer. Every channel. <em>One command center.</em></h1>
       <p class="hero-copy">
