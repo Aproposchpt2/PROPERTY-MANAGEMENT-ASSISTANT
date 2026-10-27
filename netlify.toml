@@ -16,6 +16,9 @@
   [functions."*"]
     node_bundler = "esbuild"
 
+  [functions."cedar-elevenlabs"]
+    timeout = 15
+
 [[redirects]]
   from = "/api/intake/carol-sip-openai"
   to = "/.netlify/functions/carol-sip-openai"

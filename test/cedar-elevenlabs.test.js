@@ -5,6 +5,10 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
+// Mutable overrides for per-test behaviour.
+const storeOverrides = {};
+const smsOverrides = {};
+
 // Stub the Supabase-backed store so no network or DB is touched.
 const storePath = path.join(__dirname, '../netlify/functions/lib/cedar-store.js');
 const calls = [];
@@ -18,7 +22,32 @@ require.cache[require.resolve(storePath)] = {
       createIncident: async (a) => { calls.push(['createIncident', a]); return { success: true, state: 'CREATED', incident_number: 'INC-1' }; },
       recordPreference: async (a) => { calls.push(['recordPreference', a]); return { success: true, state: 'RECORDED' }; },
       close: async (a) => { calls.push(['close', a]); return { success: true, state: 'CLOSED' }; },
+      claimSms: async (a) => {
+        calls.push(['claimSms', a]);
+        return storeOverrides.claimSms
+          ? storeOverrides.claimSms(a)
+          : { success: true, destination: '+17025550100', caseNumber: 'INC-1', requestId: 'req_1' };
+      },
+      recordSms: async (a) => {
+        calls.push(['recordSms', a]);
+        return storeOverrides.recordSms ? storeOverrides.recordSms(a) : { success: true };
+      },
     }),
+  },
+};
+
+// Stub pma-sms so no Twilio is touched.
+const smsPath = path.join(__dirname, '../netlify/functions/lib/pma-sms.js');
+require.cache[require.resolve(smsPath)] = {
+  id: smsPath,
+  filename: smsPath,
+  loaded: true,
+  exports: {
+    sendCaseConfirmation: async (a) => {
+      calls.push(['sendCaseConfirmation', a]);
+      if (smsOverrides.sendCaseConfirmation) return smsOverrides.sendCaseConfirmation(a);
+      return { sid: 'SM_test_123' };
+    },
   },
 };
 
@@ -88,4 +117,120 @@ test('legacy signed envelope still works', async () => {
   const out = JSON.parse(res.body);
   assert.equal(out.tool_call_id, 'tc_1');
   assert.equal(JSON.parse(out.result).state, 'CLOSED');
+});
+
+// ── SMS test cases ──────────────────────────────────────────────────────────
+
+const smsBody = {
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_sms_test',
+  conversation_id: 'conv_sms_1',
+  caller_id: '+17025550100',
+  method: 'sms',
+  destination: '+17025550100',
+  consent: true,
+};
+
+test('sms method with PMA_SMS_ENABLED=true sends exactly one text and returns notificationSent true', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, true);
+  assert.equal(out.notificationState, 'SENT');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 1);
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'SENT'));
+});
+
+test('PMA_SMS_ENABLED not set returns notificationState DISABLED without calling send', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  delete process.env.PMA_SMS_ENABLED;
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'DISABLED');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+});
+
+test('email method does not trigger SMS send', async () => {
+  calls.length = 0;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  const emailBody = { ...smsBody, method: 'email', destination: 'test@example.com' };
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+  assert.equal(out.notificationSent, undefined);
+});
+
+test('claim returning ALREADY_SENT short-circuits send and returns that state', async () => {
+  calls.length = 0;
+  storeOverrides.claimSms = async () => ({ success: false, state: 'ALREADY_SENT' });
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete storeOverrides.claimSms;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'ALREADY_SENT');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+});
+
+test('Twilio error code 21610 records OPTED_OUT and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  smsOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('OPTED_OUT'), { code: 21610, twilioCode: 21610 });
+  };
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete smsOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'OPTED_OUT');
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'OPTED_OUT'));
+});
+
+test('Twilio generic error records FAILED and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  smsOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('network error'), { code: 'ECONNRESET' });
+  };
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete smsOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'FAILED');
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'FAILED'));
 });

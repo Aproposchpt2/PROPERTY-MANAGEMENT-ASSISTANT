@@ -178,7 +178,46 @@ exports.handler = async function handler(event) {
         consent: parameters.consent,
       };
       const result = await store.recordPreference({ session_id, call_sid, args });
-      return respond(result || { success: false, state: 'UNKNOWN' });
+      if (!result || !result.success) {
+        return respond(result || { success: false, state: 'UNKNOWN' });
+      }
+      if (args.method !== 'sms') {
+        return respond(result);
+      }
+      if (env.PMA_SMS_ENABLED !== 'true') {
+        return respond({ ...result, notificationSent: false, notificationState: 'DISABLED' });
+      }
+      // SMS case confirmation — failures here must NOT fail the saved preference
+      let notificationSent = false;
+      let notificationState = 'FAILED';
+      try {
+        const claim = await store.claimSms({ session_id, call_sid });
+        if (!claim || !claim.success) {
+          return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
+        }
+        const { sendCaseConfirmation } = require('./lib/pma-sms');
+        try {
+          const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
+          notificationSent = true;
+          notificationState = 'SENT';
+          try {
+            await store.recordSms({ session_id, call_sid, message_sid: sid, outcome: 'SENT', error_code: null });
+          } catch (recErr) {
+            console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+          }
+        } catch (sendErr) {
+          const smsOutcome = sendErr.code === 21610 || sendErr.twilioCode === 21610 ? 'OPTED_OUT' : 'FAILED';
+          notificationState = smsOutcome;
+          try {
+            await store.recordSms({ session_id, call_sid, message_sid: null, outcome: smsOutcome, error_code: String(sendErr.code || '') });
+          } catch (recErr) {
+            console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+          }
+        }
+      } catch (smsFlowErr) {
+        console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
+      }
+      return respond({ ...result, notificationSent, notificationState });
     }
     if (tool_name === 'close_session') {
       const result = await store.close({ session_id, call_sid });

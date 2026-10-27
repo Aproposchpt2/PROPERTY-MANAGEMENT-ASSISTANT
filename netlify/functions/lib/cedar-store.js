@@ -48,6 +48,10 @@ function createStore(env = process.env) {
       }),
     close: ({ session_id, call_sid }) =>
       rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id: call_sid }),
+    claimSms: ({ session_id, call_sid }) =>
+      rpc('pma_voice_incident_sms_claim_v1', { session_id, call_sid, sip_call_id: call_sid }),
+    recordSms: ({ session_id, call_sid, message_sid, outcome, error_code }) =>
+      rpc('pma_voice_incident_sms_result_v1', { session_id, call_sid, sip_call_id: call_sid, message_sid, outcome, error_code }),
   };
 }
 
