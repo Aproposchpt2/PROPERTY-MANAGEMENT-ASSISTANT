@@ -195,7 +195,7 @@ exports.handler = async function handler(event) {
         if (!claim || !claim.success) {
           return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
         }
-        const { sendCaseConfirmation } = require('./lib/pma-sms');
+        const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
         try {
           const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
           notificationSent = true;
@@ -214,6 +214,11 @@ exports.handler = async function handler(event) {
             console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
           }
         }
+        // Best-effort staff notifications — never block or fail the preference result
+        await Promise.allSettled([
+          sendStaffNotification({ to: env.PMA_SMS_MAINTENANCE_NUMBER, caseNumber: claim.caseNumber, env }),
+          sendStaffNotification({ to: env.PMA_SMS_MANAGER_NUMBER, caseNumber: claim.caseNumber, env }),
+        ]);
       } catch (smsFlowErr) {
         console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
       }

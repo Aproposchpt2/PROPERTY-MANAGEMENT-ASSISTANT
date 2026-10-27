@@ -38,4 +38,33 @@ async function sendCaseConfirmation({ to, caseNumber, env }) {
   return { sid: msg.sid };
 }
 
-module.exports = { sendCaseConfirmation };
+// Staff alert sent to Maintenance and Manager numbers (best-effort, no DB record).
+async function sendStaffNotification({ to, caseNumber, env }) {
+  if (!to) return;
+  if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) return;
+  const twilio = require('twilio');
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const params = {
+    to,
+    body: `Desert Ridge PMA: New maintenance case #${caseNumber} filed. Review in your system for details.`,
+  };
+  if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
+    params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+  } else {
+    params.from = env.PMA_SMS_FROM_NUMBER;
+  }
+  const last4 = String(to).slice(-4);
+  try {
+    const msg = await Promise.race([
+      client.messages.create(params),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMS_TIMEOUT')), 8000)
+      ),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_sms_staff_sent', to_last4: last4, sid: msg.sid }));
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pma_sms_staff_failed', to_last4: last4, code: err.code || err.message }));
+  }
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification };

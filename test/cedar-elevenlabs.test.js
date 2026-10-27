@@ -48,6 +48,9 @@ require.cache[require.resolve(smsPath)] = {
       if (smsOverrides.sendCaseConfirmation) return smsOverrides.sendCaseConfirmation(a);
       return { sid: 'SM_test_123' };
     },
+    sendStaffNotification: async (a) => {
+      calls.push(['sendStaffNotification', a]);
+    },
   },
 };
 
@@ -233,4 +236,25 @@ test('Twilio generic error records FAILED and preference still succeeds', async 
   assert.equal(out.notificationSent, false);
   assert.equal(out.notificationState, 'FAILED');
   assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'FAILED'));
+});
+
+test('staff notifications fire for maintenance and manager numbers after successful claim', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17253305102';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+17027102622';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 2);
+  const tos = staffCalls.map((c) => c[1].to);
+  assert.ok(tos.includes('+17253305102'));
+  assert.ok(tos.includes('+17027102622'));
 });
