@@ -32,6 +32,16 @@ require.cache[require.resolve(storePath)] = {
         calls.push(['recordSms', a]);
         return storeOverrides.recordSms ? storeOverrides.recordSms(a) : { success: true };
       },
+      claimEmail: async (a) => {
+        calls.push(['claimEmail', a]);
+        return storeOverrides.claimEmail
+          ? storeOverrides.claimEmail(a)
+          : { success: true, destination: 'tenant@example.com', caseNumber: 'INC-1', requestId: 'req_1' };
+      },
+      recordEmail: async (a) => {
+        calls.push(['recordEmail', a]);
+        return storeOverrides.recordEmail ? storeOverrides.recordEmail(a) : { success: true };
+      },
     }),
   },
 };
@@ -50,6 +60,27 @@ require.cache[require.resolve(smsPath)] = {
     },
     sendStaffNotification: async (a) => {
       calls.push(['sendStaffNotification', a]);
+    },
+  },
+};
+
+// Mutable overrides for email per-test behaviour.
+const emailOverrides = {};
+
+// Stub pma-email so no Resend is touched.
+const emailPath = path.join(__dirname, '../netlify/functions/lib/pma-email.js');
+require.cache[require.resolve(emailPath)] = {
+  id: emailPath,
+  filename: emailPath,
+  loaded: true,
+  exports: {
+    sendCaseConfirmation: async (a) => {
+      calls.push(['email_sendCaseConfirmation', a]);
+      if (emailOverrides.sendCaseConfirmation) return emailOverrides.sendCaseConfirmation(a);
+      return { id: 'RE_test_abc123' };
+    },
+    sendStaffNotification: async (a) => {
+      calls.push(['email_sendStaffNotification', a]);
     },
   },
 };
@@ -177,7 +208,7 @@ test('email method does not trigger SMS send', async () => {
   const out = JSON.parse(res.body);
   assert.equal(out.success, true);
   assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
-  assert.equal(out.notificationSent, undefined);
+  assert.equal(out.notificationSent, false);
 });
 
 test('claim returning ALREADY_SENT short-circuits send and returns that state', async () => {
@@ -257,4 +288,107 @@ test('staff notifications fire for maintenance and manager numbers after success
   const tos = staffCalls.map((c) => c[1].to);
   assert.ok(tos.includes('+15550000001'));
   assert.ok(tos.includes('+15550000002'));
+});
+
+// ── Email test cases ─────────────────────────────────────────────────────────
+
+const emailBody = {
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_email_test',
+  conversation_id: 'conv_email_1',
+  caller_id: '+17025550100',
+  method: 'email',
+  destination: 'tenant@example.com',
+  consent: true,
+};
+
+test('email method with PMA_EMAIL_ENABLED=true sends confirmation and returns notificationSent true', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, true);
+  assert.equal(out.notificationState, 'SENT');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 1);
+  assert.ok(calls.some((c) => c[0] === 'recordEmail' && c[1].outcome === 'SENT'));
+});
+
+test('email method with PMA_EMAIL_ENABLED not set returns notificationState DISABLED', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  delete process.env.PMA_EMAIL_ENABLED;
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'DISABLED');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 0);
+});
+
+test('email claim returning ALREADY_SENT short-circuits send', async () => {
+  calls.length = 0;
+  storeOverrides.claimEmail = async () => ({ success: false, state: 'ALREADY_SENT' });
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete storeOverrides.claimEmail;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'ALREADY_SENT');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 0);
+});
+
+test('email send failure records FAILED and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  emailOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('network error'), { code: 'ECONNRESET' });
+  };
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete emailOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'FAILED');
+  assert.ok(calls.some((c) => c[0] === 'recordEmail' && c[1].outcome === 'FAILED'));
+});
+
+test('email staff notifications fire after successful claim', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  process.env.PMA_EMAIL_MAINTENANCE_ADDRESS = 'maintenance@example.com';
+  process.env.PMA_EMAIL_MANAGER_ADDRESS = 'manager@example.com';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.PMA_EMAIL_MAINTENANCE_ADDRESS;
+  delete process.env.PMA_EMAIL_MANAGER_ADDRESS;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'email_sendStaffNotification');
+  assert.equal(staffCalls.length, 2);
+  const tos = staffCalls.map((c) => c[1].to);
+  assert.ok(tos.includes('maintenance@example.com'));
+  assert.ok(tos.includes('manager@example.com'));
 });

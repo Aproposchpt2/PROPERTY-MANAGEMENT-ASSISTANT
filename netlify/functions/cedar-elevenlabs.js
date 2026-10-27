@@ -181,46 +181,84 @@ exports.handler = async function handler(event) {
       if (!result || !result.success) {
         return respond(result || { success: false, state: 'UNKNOWN' });
       }
-      if (args.method !== 'sms') {
+      if (args.method !== 'sms' && args.method !== 'email') {
         return respond(result);
       }
-      if (env.PMA_SMS_ENABLED !== 'true') {
+      // ── SMS case confirmation ─────────────────────────────────────────────
+      if (args.method === 'sms') {
+        if (env.PMA_SMS_ENABLED !== 'true') {
+          return respond({ ...result, notificationSent: false, notificationState: 'DISABLED' });
+        }
+        let notificationSent = false;
+        let notificationState = 'FAILED';
+        try {
+          const claim = await store.claimSms({ session_id, call_sid });
+          if (!claim || !claim.success) {
+            return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
+          }
+          const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
+          try {
+            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
+            notificationSent = true;
+            notificationState = 'SENT';
+            try {
+              await store.recordSms({ session_id, call_sid, message_sid: sid, outcome: 'SENT', error_code: null });
+            } catch (recErr) {
+              console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+            }
+          } catch (sendErr) {
+            const smsOutcome = sendErr.code === 21610 || sendErr.twilioCode === 21610 ? 'OPTED_OUT' : 'FAILED';
+            notificationState = smsOutcome;
+            try {
+              await store.recordSms({ session_id, call_sid, message_sid: null, outcome: smsOutcome, error_code: String(sendErr.code || '') });
+            } catch (recErr) {
+              console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+            }
+          }
+          await Promise.allSettled([
+            sendStaffNotification({ to: env.PMA_SMS_MAINTENANCE_NUMBER, caseNumber: claim.caseNumber, env }),
+            sendStaffNotification({ to: env.PMA_SMS_MANAGER_NUMBER, caseNumber: claim.caseNumber, env }),
+          ]);
+        } catch (smsFlowErr) {
+          console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
+        }
+        return respond({ ...result, notificationSent, notificationState });
+      }
+      // ── Email case confirmation ───────────────────────────────────────────
+      if (env.PMA_EMAIL_ENABLED !== 'true') {
         return respond({ ...result, notificationSent: false, notificationState: 'DISABLED' });
       }
-      // SMS case confirmation — failures here must NOT fail the saved preference
       let notificationSent = false;
       let notificationState = 'FAILED';
       try {
-        const claim = await store.claimSms({ session_id, call_sid });
+        const claim = await store.claimEmail({ session_id, call_sid });
         if (!claim || !claim.success) {
           return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
         }
-        const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
+        const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-email');
         try {
-          const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
+          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
           notificationSent = true;
           notificationState = 'SENT';
           try {
-            await store.recordSms({ session_id, call_sid, message_sid: sid, outcome: 'SENT', error_code: null });
+            await store.recordEmail({ session_id, call_sid, message_id: id, outcome: 'SENT', error_code: null });
           } catch (recErr) {
-            console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+            console.error(JSON.stringify({ event: 'cedar_email_record_failed', error: recErr?.message }));
           }
         } catch (sendErr) {
-          const smsOutcome = sendErr.code === 21610 || sendErr.twilioCode === 21610 ? 'OPTED_OUT' : 'FAILED';
-          notificationState = smsOutcome;
+          notificationState = 'FAILED';
           try {
-            await store.recordSms({ session_id, call_sid, message_sid: null, outcome: smsOutcome, error_code: String(sendErr.code || '') });
+            await store.recordEmail({ session_id, call_sid, message_id: null, outcome: 'FAILED', error_code: String(sendErr.code || '') });
           } catch (recErr) {
-            console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
+            console.error(JSON.stringify({ event: 'cedar_email_record_failed', error: recErr?.message }));
           }
         }
-        // Best-effort staff notifications — never block or fail the preference result
         await Promise.allSettled([
-          sendStaffNotification({ to: env.PMA_SMS_MAINTENANCE_NUMBER, caseNumber: claim.caseNumber, env }),
-          sendStaffNotification({ to: env.PMA_SMS_MANAGER_NUMBER, caseNumber: claim.caseNumber, env }),
+          sendStaffNotification({ to: env.PMA_EMAIL_MAINTENANCE_ADDRESS, caseNumber: claim.caseNumber, env }),
+          sendStaffNotification({ to: env.PMA_EMAIL_MANAGER_ADDRESS, caseNumber: claim.caseNumber, env }),
         ]);
-      } catch (smsFlowErr) {
-        console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
+      } catch (emailFlowErr) {
+        console.error(JSON.stringify({ event: 'cedar_email_flow_failed', error: emailFlowErr?.message }));
       }
       return respond({ ...result, notificationSent, notificationState });
     }
