@@ -21,3 +21,15 @@
   to = "/.netlify/functions/carol-sip-openai"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/intake/cedar-twilio"
+  to = "/.netlify/functions/cedar-twilio"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/tools/cedar-elevenlabs"
+  to = "/.netlify/functions/cedar-elevenlabs"
+  status = 200
+  force = true
