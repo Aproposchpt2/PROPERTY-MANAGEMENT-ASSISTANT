@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "test": "echo \"No automated tests configured for Phase 1A\""
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
