@@ -3,8 +3,17 @@
 // ElevenLabs tool webhook handler for the Cedar agent.
 // ElevenLabs fires this endpoint when the LLM calls create_incident,
 // record_contact_preference, or close_session.
-// session_id and call_sid arrive as dynamic variables (injected by ElevenLabs
-// from the TwiML <Parameter> values set in cedar-twilio.js).
+//
+// Two entry paths are supported:
+//   1. cedar-twilio.js path: session_id and call_sid arrive as dynamic variables
+//      injected via TwiML <Parameter> tags.
+//   2. ElevenLabs-native phone number path: session_id and call_sid are absent.
+//      In this case, conversation_id from the payload is used as call_sid and
+//      caller_id from dynamic variables is used as caller_number for lazy session init.
+//
+// In both cases, if session_id is missing, a session is created lazily via
+// pma_voice_session_start_v1 (which is idempotent — safe to call multiple times
+// for the same call_sid).
 
 const crypto = require('node:crypto');
 const { createStore } = require('./lib/cedar-store');
@@ -47,6 +56,11 @@ function errorResponse(toolCallId, state, reply) {
   return toolResponse(toolCallId, { success: false, state, ...(reply ? { reply } : {}) });
 }
 
+// E.164 pattern required by pma_voice_session_start_v1.
+const E164_RE = /^\+[1-9][0-9]{7,14}$/;
+// Printable ASCII pattern required for call_sid.
+const CALL_SID_RE = /^[!-~]{1,200}$/;
+
 exports.handler = async function handler(event) {
   const env = process.env;
   if (event.httpMethod !== 'POST') {
@@ -66,19 +80,39 @@ exports.handler = async function handler(event) {
   if (!tool_call_id) {
     return { statusCode: 400, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Missing tool_call_id' }) };
   }
-  // ElevenLabs injects dynamic variables either under dynamic_variables or merged into parameters.
+
+  // Resolve call identity — works for both entry paths:
+  //   cedar-twilio.js path: dynamic_variables has call_sid and session_id
+  //   ElevenLabs-native path: payload.conversation_id is the call identifier;
+  //                            dynamic_variables has caller_id (ElevenLabs injects it)
   const dyn = payload.dynamic_variables || {};
-  const session_id = dyn.session_id || parameters.session_id;
-  const call_sid = dyn.call_sid || parameters.call_sid;
-  if (!session_id || !call_sid) {
+  const call_sid = dyn.call_sid || payload.conversation_id;
+  const caller_number_raw = dyn.caller_number || dyn.caller_id || '';
+  const prebuilt_session_id = dyn.session_id;
+
+  if (!call_sid || !CALL_SID_RE.test(call_sid)) {
     return errorResponse(tool_call_id, 'MISSING_CONTEXT', 'The operation was not confirmed. Do not invent success or a number.');
   }
+
   let store;
   try {
     store = createStore(env);
   } catch {
     return errorResponse(tool_call_id, 'DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
   }
+
+  // Resolve session_id — lazy init if not pre-populated (ElevenLabs-native path).
+  let session_id = prebuilt_session_id;
+  if (!session_id) {
+    const caller_number = E164_RE.test(caller_number_raw) ? caller_number_raw : '+10000000000';
+    try {
+      const binding = await store.start({ call_sid, caller_number });
+      session_id = binding.session_id;
+    } catch {
+      return errorResponse(tool_call_id, 'DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
+    }
+  }
+
   try {
     if (tool_name === 'create_incident') {
       const args = {
