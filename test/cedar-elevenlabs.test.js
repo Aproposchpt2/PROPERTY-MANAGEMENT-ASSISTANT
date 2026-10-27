@@ -244,8 +244,8 @@ test('staff notifications fire for maintenance and manager numbers after success
   delete smsOverrides.sendCaseConfirmation;
   process.env.PMA_SMS_ENABLED = 'true';
   process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
-  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17253305102';
-  process.env.PMA_SMS_MANAGER_NUMBER = '+17027102622';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+15550000001';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+15550000002';
   const res = await post(smsBody, { 'x-pma-tool-key': KEY });
   delete process.env.PMA_SMS_ENABLED;
   delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
@@ -255,6 +255,6 @@ test('staff notifications fire for maintenance and manager numbers after success
   const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
   assert.equal(staffCalls.length, 2);
   const tos = staffCalls.map((c) => c[1].to);
-  assert.ok(tos.includes('+17253305102'));
-  assert.ok(tos.includes('+17027102622'));
+  assert.ok(tos.includes('+15550000001'));
+  assert.ok(tos.includes('+15550000002'));
 });
