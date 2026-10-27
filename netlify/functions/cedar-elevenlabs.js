@@ -44,16 +44,51 @@ function verifyElevenLabs(rawBody, header, secret, now = Date.now()) {
   return JSON.parse(rawBody);
 }
 
-function toolResponse(toolCallId, result) {
+// ElevenLabs server (webhook) tools do NOT sign requests — only post-call
+// webhooks carry ElevenLabs-Signature. Tool calls authenticate with a static
+// shared key sent as the x-pma-tool-key header (stored as a secret in
+// ElevenLabs, PMA_ELEVENLABS_TOOL_KEY in Netlify).
+function verifyToolKey(header, key) {
+  if (typeof key !== 'string' || key.length < 32) return false;
+  if (typeof header !== 'string' || !header) return false;
+  return safeEqual(header, key);
+}
+
+// ElevenLabs webhook tools POST only the configured body schema (flat).
+// Each Cedar tool sends tool_name as a constant plus call identity from
+// system dynamic variables. Legacy envelope payloads ({tool_name,
+// tool_call_id, parameters, dynamic_variables}) are still accepted.
+const IDENTITY_FIELDS = new Set(['tool_name', 'call_sid', 'conversation_id', 'caller_id', 'session_id']);
+
+function normalizePayload(payload) {
+  if (payload && typeof payload === 'object' && payload.tool_call_id) {
+    return { envelope: true, ...payload };
+  }
+  const body = payload && typeof payload === 'object' ? payload : {};
+  const parameters = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (!IDENTITY_FIELDS.has(k)) parameters[k] = v;
+  }
   return {
-    statusCode: 200,
-    headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    body: JSON.stringify({ tool_call_id: toolCallId, result: JSON.stringify(result) }),
+    envelope: false,
+    tool_name: body.tool_name,
+    tool_call_id: `el_${crypto.randomUUID()}`,
+    conversation_id: body.conversation_id,
+    parameters,
+    dynamic_variables: { call_sid: body.call_sid, caller_id: body.caller_id, session_id: body.session_id },
   };
 }
 
-function errorResponse(toolCallId, state, reply) {
-  return toolResponse(toolCallId, { success: false, state, ...(reply ? { reply } : {}) });
+function toolResponse(toolCallId, result, envelope = true) {
+  return {
+    statusCode: 200,
+    headers: { 'content-type': 'application/json', 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
+    body: JSON.stringify(envelope ? { tool_call_id: toolCallId, result: JSON.stringify(result) } : result),
+  };
+}
+
+function errorResponse(toolCallId, state, reply, envelope = true) {
+  return toolResponse(toolCallId, { success: false, state, ...(reply ? { reply } : {}) }, envelope);
 }
 
 // E.164 pattern required by pma_voice_session_start_v1.
@@ -71,14 +106,26 @@ exports.handler = async function handler(event) {
     : (event.body || '');
   const headers = Object.fromEntries(Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
   let payload;
-  try {
-    payload = verifyElevenLabs(rawBody, headers['elevenlabs-signature'], env.ELEVENLABS_WEBHOOK_SECRET);
-  } catch {
-    return { statusCode: 401, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Invalid signature' }) };
+  if (verifyToolKey(headers['x-pma-tool-key'], env.PMA_ELEVENLABS_TOOL_KEY)) {
+    try {
+      payload = JSON.parse(rawBody || '{}');
+    } catch {
+      return { statusCode: 400, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    }
+  } else {
+    try {
+      payload = verifyElevenLabs(rawBody, headers['elevenlabs-signature'], env.ELEVENLABS_WEBHOOK_SECRET);
+    } catch {
+      console.error(JSON.stringify({ event: 'cedar_elevenlabs_auth_failed', has_tool_key: Boolean(headers['x-pma-tool-key']), has_signature: Boolean(headers['elevenlabs-signature']) }));
+      return { statusCode: 401, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Unauthorized' }) };
+    }
   }
-  const { tool_name, tool_call_id, parameters = {} } = payload;
-  if (!tool_call_id) {
-    return { statusCode: 400, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Missing tool_call_id' }) };
+  payload = normalizePayload(payload);
+  const { tool_name, tool_call_id, envelope, parameters = {} } = payload;
+  const respond = (result) => toolResponse(tool_call_id, result, envelope);
+  const fail = (state, reply) => errorResponse(tool_call_id, state, reply, envelope);
+  if (!tool_name) {
+    return fail('UNSUPPORTED_TOOL', 'The operation was not confirmed. Do not invent success or a number.');
   }
 
   // Resolve call identity — works for both entry paths:
@@ -91,14 +138,14 @@ exports.handler = async function handler(event) {
   const prebuilt_session_id = dyn.session_id;
 
   if (!call_sid || !CALL_SID_RE.test(call_sid)) {
-    return errorResponse(tool_call_id, 'MISSING_CONTEXT', 'The operation was not confirmed. Do not invent success or a number.');
+    return fail('MISSING_CONTEXT', 'The operation was not confirmed. Do not invent success or a number.');
   }
 
   let store;
   try {
     store = createStore(env);
   } catch {
-    return errorResponse(tool_call_id, 'DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
+    return fail('DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
   }
 
   // Resolve session_id — lazy init if not pre-populated (ElevenLabs-native path).
@@ -109,7 +156,7 @@ exports.handler = async function handler(event) {
       const binding = await store.start({ call_sid, caller_number });
       session_id = binding.session_id;
     } catch {
-      return errorResponse(tool_call_id, 'DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
+      return fail('DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
     }
   }
 
@@ -122,7 +169,7 @@ exports.handler = async function handler(event) {
         description: parameters.description,
       };
       const result = await store.createIncident({ session_id, call_sid, args });
-      return toolResponse(tool_call_id, result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
+      return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
     }
     if (tool_name === 'record_contact_preference') {
       const args = {
@@ -131,15 +178,15 @@ exports.handler = async function handler(event) {
         consent: parameters.consent,
       };
       const result = await store.recordPreference({ session_id, call_sid, args });
-      return toolResponse(tool_call_id, result || { success: false, state: 'UNKNOWN' });
+      return respond(result || { success: false, state: 'UNKNOWN' });
     }
     if (tool_name === 'close_session') {
       const result = await store.close({ session_id, call_sid });
-      return toolResponse(tool_call_id, result || { success: true, state: 'CLOSED' });
+      return respond(result || { success: true, state: 'CLOSED' });
     }
-    return errorResponse(tool_call_id, 'UNSUPPORTED_TOOL');
+    return fail('UNSUPPORTED_TOOL');
   } catch (err) {
     console.error(JSON.stringify({ event: 'cedar_elevenlabs_tool_failed', tool: tool_name, error: err?.message }));
-    return errorResponse(tool_call_id, 'UNKNOWN', 'The operation was not confirmed. Do not invent success or a number.');
+    return fail('UNKNOWN', 'The operation was not confirmed. Do not invent success or a number.');
   }
 };
