@@ -18,3 +18,8 @@
 .demo-dial>p:not(.demo-dial-number){color:#D3CEC1;line-height:1.7}
 .demo-dial .demo-dial-number{font:400 clamp(38px,7vw,76px)/1.15 'Cormorant Garamond',Georgia,serif;color:#E4C878;letter-spacing:.035em;margin:15px auto;white-space:nowrap}
 @media(max-width:400px){.demo-dial .demo-dial-number{font-size:clamp(32px,10vw,45px)}}
+
+/* Customer Care Center hero extension — preserve premium non-bold serif brand treatment. */
+.hero-care-center{color:var(--light);font:400 clamp(26px,3.2vw,47px)/1.13 'Cormorant Garamond',Georgia,serif;letter-spacing:.02em;margin:-7px 0 19px;max-width:760px}
+.hero-service-message{max-width:760px;border-left:1px solid var(--gold);padding-left:20px}
+@media(max-width:750px){.hero-care-center{font-size:clamp(25px,6.2vw,39px)}.hero-service-message{padding-left:15px}}
