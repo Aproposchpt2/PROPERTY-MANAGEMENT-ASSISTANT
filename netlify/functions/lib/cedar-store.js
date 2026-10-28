@@ -58,6 +58,10 @@ function createStore(env = process.env) {
       rpc('pma_voice_incident_email_result_v1', { session_id, call_sid, sip_call_id: call_sid, message_id, outcome, error_code }),
     lookupCase: ({ caller_number, case_number }) =>
       rpc('pma_voice_case_lookup_v1', { caller_number: caller_number || null, case_number: case_number || null }),
+    logCall: ({ conversation_id, agent_id, call_duration_secs, credits_used, twilio_cost_usd, termination_reason, call_successful, started_at }) =>
+      rpc('pma_call_log_insert_v1', { conversation_id, agent_id, call_duration_secs, credits_used: credits_used || null, twilio_cost_usd: twilio_cost_usd || null, termination_reason: termination_reason || null, call_successful: call_successful || null, started_at: started_at || null }),
+    callLogSummary: () =>
+      rpc('pma_call_log_summary_v1', {}),
   };
 }
 

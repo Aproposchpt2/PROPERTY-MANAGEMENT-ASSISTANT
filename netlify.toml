@@ -36,3 +36,15 @@
   to = "/.netlify/functions/cedar-elevenlabs"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/postcall"
+  to = "/.netlify/functions/cedar-postcall"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/call-log"
+  to = "/.netlify/functions/cedar-call-log"
+  status = 200
+  force = true
