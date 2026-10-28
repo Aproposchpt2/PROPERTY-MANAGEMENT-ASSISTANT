@@ -19,7 +19,12 @@ require.cache[require.resolve(storePath)] = {
   exports: {
     createStore: () => ({
       start: async (a) => { calls.push(['start', a]); return { session_id: 'sess_1' }; },
-      createIncident: async (a) => { calls.push(['createIncident', a]); return { success: true, state: 'CREATED', incident_number: 'INC-1' }; },
+      createIncident: async (a) => {
+        calls.push(['createIncident', a]);
+        return storeOverrides.createIncident
+          ? storeOverrides.createIncident(a)
+          : { success: true, state: 'CREATED', incident_number: 'INC-1' };
+      },
       recordPreference: async (a) => { calls.push(['recordPreference', a]); return { success: true, state: 'RECORDED' }; },
       close: async (a) => { calls.push(['close', a]); return { success: true, state: 'CLOSED' }; },
       claimSms: async (a) => {
@@ -97,6 +102,7 @@ const KEY = 'k'.repeat(48);
 const SECRET = 's'.repeat(32);
 process.env.PMA_ELEVENLABS_TOOL_KEY = KEY;
 process.env.ELEVENLABS_WEBHOOK_SECRET = SECRET;
+process.env.PMA_CREATE_DELAY_MS = '0'; // disable processing delay in tests; delay-specific tests override this
 
 const post = (body, headers = {}) => handler({ httpMethod: 'POST', headers, body: JSON.stringify(body), isBase64Encoded: false });
 
@@ -461,4 +467,86 @@ test('get_case_status NOT_FOUND returns not-found state', async () => {
   const out = JSON.parse(res.body);
   assert.equal(out.success, false);
   assert.equal(out.state, 'NOT_FOUND');
+});
+
+// ── Language capture ──────────────────────────────────────────────────────────
+
+test('create_incident passes language=es from body to store args', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  const res = await post({ ...incidentBody, language: 'es' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const inc = calls.find((c) => c[0] === 'createIncident')[1];
+  assert.equal(inc.args.language, 'es');
+});
+
+test('create_incident omits language key for unknown locale', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  const res = await post({ ...incidentBody, language: 'fr' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const inc = calls.find((c) => c[0] === 'createIncident')[1];
+  assert.ok(!Object.prototype.hasOwnProperty.call(inc.args, 'language'));
+});
+
+test('sms claim language=es is forwarded to sendCaseConfirmation', async () => {
+  calls.length = 0;
+  storeOverrides.claimSms = async () => ({ success: true, destination: '+17025550100', caseNumber: 'INC-1', requestId: 'req_1', language: 'es' });
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete storeOverrides.claimSms;
+  const smsCall = calls.find((c) => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall, 'sendCaseConfirmation must have been called');
+  assert.equal(smsCall[1].language, 'es');
+});
+
+test('email claim language=es is forwarded to sendCaseConfirmation', async () => {
+  calls.length = 0;
+  storeOverrides.claimEmail = async () => ({ success: true, destination: 'tenant@example.com', caseNumber: 'INC-1', requestId: 'req_1', language: 'es' });
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete storeOverrides.claimEmail;
+  const emailCall = calls.find((c) => c[0] === 'email_sendCaseConfirmation');
+  assert.ok(emailCall, 'email sendCaseConfirmation must have been called');
+  assert.equal(emailCall[1].language, 'es');
+});
+
+// ── Processing pause ──────────────────────────────────────────────────────────
+
+test('processing delay fires for non-urgent create_incident', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  process.env.PMA_CREATE_DELAY_MS = '150';
+  const t0 = Date.now();
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  const elapsed = Date.now() - t0;
+  process.env.PMA_CREATE_DELAY_MS = '0';
+  assert.equal(res.statusCode, 200);
+  assert.ok(elapsed >= 100, `expected >= 100ms delay, got ${elapsed}ms`);
+});
+
+test('processing delay is bypassed for urgent create_incident', async () => {
+  calls.length = 0;
+  storeOverrides.createIncident = async (a) => {
+    calls.push(['createIncident', a]);
+    return { success: true, state: 'CONFIRMED', caseNumber: 'INC-2', urgentReviewRequired: true };
+  };
+  process.env.PMA_CREATE_DELAY_MS = '500';
+  const t0 = Date.now();
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  const elapsed = Date.now() - t0;
+  process.env.PMA_CREATE_DELAY_MS = '0';
+  delete storeOverrides.createIncident;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.urgentReviewRequired, true);
+  assert.ok(elapsed < 400, `expected no delay for urgent, got ${elapsed}ms`);
 });

@@ -162,13 +162,20 @@ exports.handler = async function handler(event) {
 
   try {
     if (tool_name === 'create_incident') {
+      const lang = parameters.language === 'en' || parameters.language === 'es' ? parameters.language : undefined;
       const args = {
         reportedName: parameters.reportedName,
         reportedAddress: parameters.reportedAddress,
         reportedUnit: parameters.reportedUnit,
         description: parameters.description,
+        ...(lang ? { language: lang } : {}),
       };
       const result = await store.createIncident({ session_id, call_sid, args });
+      if (result && result.success && !result.urgentReviewRequired) {
+        const raw = Number(env.PMA_CREATE_DELAY_MS);
+        const delayMs = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 4000) : 2500;
+        if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+      }
       return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
     }
     if (tool_name === 'record_contact_preference') {
@@ -198,7 +205,7 @@ exports.handler = async function handler(event) {
           }
           const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
           try {
-            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
+            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, env });
             notificationSent = true;
             notificationState = 'SENT';
             try {
@@ -237,7 +244,7 @@ exports.handler = async function handler(event) {
         }
         const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-email');
         try {
-          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, env });
+          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, env });
           notificationSent = true;
           notificationState = 'SENT';
           try {
