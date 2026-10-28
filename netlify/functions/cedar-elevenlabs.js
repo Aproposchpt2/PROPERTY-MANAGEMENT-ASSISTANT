@@ -58,7 +58,7 @@ function verifyToolKey(header, key) {
 // Each Cedar tool sends tool_name as a constant plus call identity from
 // system dynamic variables. Legacy envelope payloads ({tool_name,
 // tool_call_id, parameters, dynamic_variables}) are still accepted.
-const IDENTITY_FIELDS = new Set(['tool_name', 'call_sid', 'conversation_id', 'caller_id', 'session_id']);
+const IDENTITY_FIELDS = new Set(['tool_name', 'call_sid', 'conversation_id', 'caller_id', 'session_id', 'system__call_sid', 'system__conversation_id', 'system__caller_id']);
 
 function normalizePayload(payload) {
   if (payload && typeof payload === 'object' && payload.tool_call_id) {
@@ -75,7 +75,7 @@ function normalizePayload(payload) {
     tool_call_id: `el_${crypto.randomUUID()}`,
     conversation_id: body.conversation_id,
     parameters,
-    dynamic_variables: { call_sid: body.call_sid, caller_id: body.caller_id, session_id: body.session_id },
+    dynamic_variables: { call_sid: body.call_sid || body.system__call_sid, caller_id: body.caller_id || body.system__caller_id, session_id: body.session_id },
   };
 }
 
