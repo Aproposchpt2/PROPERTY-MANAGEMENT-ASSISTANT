@@ -309,16 +309,19 @@ async function saveCase(id) {
   setTimeout(() => { msg.textContent = ''; }, 3000);
 }
 
+// datetime-local has no zone; interpret in the manager's browser time and send ISO with offset.
+function localToIso(v) { if (!v) return null; const d = new Date(v); return isNaN(d) ? null : d.toISOString(); }
+
 async function assignVendor(id) {
   const msg = document.getElementById('assign-msg');
   const vid = document.getElementById('p-vendor').value;
   if (!vid) { msg.textContent = 'Select a vendor.'; return; }
   msg.textContent = 'Assigning…';
   const body = {
-    vendor_id: vid,
-    scheduled_start: document.getElementById('p-sched-start').value || null,
-    scheduled_end: document.getElementById('p-sched-end').value || null,
-    work_order_ref: document.getElementById('p-wo').value || null,
+    vendorId: vid,
+    scheduledStart: localToIso(document.getElementById('p-sched-start').value),
+    scheduledEnd: localToIso(document.getElementById('p-sched-end').value),
+    workOrderRef: document.getElementById('p-wo').value.trim() || null,
   };
   const d = await apiFetch('/api/manager/cases/' + id + '/assign', { method: 'POST', body: JSON.stringify(body) });
   msg.textContent = d.success ? 'Assigned.' : ('Error: ' + (d.error || 'unknown'));
