@@ -220,20 +220,20 @@ function renderCases() {
   if (!_cases.length) { el.innerHTML = '<div class="empty">No cases found.</div>'; return; }
   const now = Date.now();
   el.innerHTML = _cases.map(c => {
-    const age = c.created_at ? (now - new Date(c.created_at)) / 36e5 : 0;
+    const age = c.createdAt ? (now - new Date(c.createdAt)) / 36e5 : 0;
     const warn = (c.status === 'New' || c.status === 'Assigned') && age >= 24;
-    const em = c.is_emergency || c.priority === 'emergency';
+    const em = c.isEmergency || c.priority === 'emergency';
     const lang = (c.language || 'en').toUpperCase();
     return `<div class="case-card${em ? ' emergency' : ''}" onclick="openCase('${c.id}')">
       <div class="case-row1">
-        <span class="case-num">${esc(c.case_number || c.id.slice(0,8))}</span>
+        <span class="case-num">${esc(c.caseNumber || c.id.slice(0,8))}</span>
         ${em ? '<span class="badge emergency">EMERGENCY</span>' : ''}
         ${warn ? '<span class="badge warn">UNSCHEDULED 24H+</span>' : ''}
         <span class="badge lang">${lang}</span>
         <span class="case-status">${esc(c.status)}</span>
       </div>
-      <p class="case-desc">${esc(c.description || '—')}</p>
-      <div class="case-meta">${esc(c.reported_address || '')}${c.reported_unit ? ' · Unit ' + esc(c.reported_unit) : ''} · ${fmtAgo(c.created_at)}${c.company_name ? ' · ' + esc(c.company_name) : ''}</div>
+      <p class="case-desc">${esc(c.reportedName || '—')}${c.scheduledStart ? ' · Scheduled ' + esc(fmtDate(c.scheduledStart)) : ''}</p>
+      <div class="case-meta">${esc(c.reportedAddress || '')}${c.reportedUnit ? ' · Unit ' + esc(c.reportedUnit) : ''} · ${fmtAgo(c.createdAt)}${c.vendorName ? ' · ' + esc(c.vendorName) : ''}</div>
     </div>`;
   }).join('');
 }
@@ -267,8 +267,8 @@ function renderPanel(c) {
   document.getElementById('panel-body').innerHTML = `
     <div class="field-row"><span class="field-label">Reported</span><span class="field-val">${fmtDate(c.createdAt)}</span></div>
     <div class="field-row"><span class="field-label">Address / Unit</span><span class="field-val">${esc(c.reportedAddress||'')}&nbsp;${c.reportedUnit?'Unit '+esc(c.reportedUnit):''}</span></div>
-    <div class="field-row"><span class="field-label">Description</span><span class="field-val">${esc(c.description||'')}</span></div>
-    <div class="field-row"><span class="field-label">Contact</span><span class="field-val muted">${esc(c.contactMasked||'—')}</span></div>
+    <div class="field-row"><span class="field-label">Description</span><span class="field-val">${esc(c.descriptionVerbatim||c.summary||'')}</span></div>
+    <div class="field-row"><span class="field-label">Contact</span><span class="field-val muted">${esc(c.contactDestinationMasked||'—')}</span></div>
     <div class="section-sep">Status &amp; Notes</div>
     <div class="field-row"><label class="field-label" for="p-status">Status</label>
       <select class="field-input" id="p-status">
