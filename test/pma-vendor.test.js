@@ -250,6 +250,32 @@ test('request_nte pending (real RPC shape) texts approver and hides contacts', a
   clearStubs();
 });
 
+test('confirmed window rewrites tenant update to match schedule', async () => {
+  clearStubs();
+  const updates = [];
+  stubSupabase(async (name, args) => {
+    if (name === 'pma_vendor_lookup_v1') return makeRpcResult({ success: true, vendorId: 'v1', companyName: 'ABC  Plumbing' });
+    if (name === 'pma_vendor_propose_window_v1') return makeRpcResult({ success: true, confirmed: true, requestId: 'r1',
+      caseNumber: 'PMA-001', scheduledStart: '2026-10-29T16:00:00+00:00', scheduledEnd: '2026-10-29T18:00:00+00:00' });
+    if (name === 'pma_mgr_case_update_v1') { updates.push(args); return makeRpcResult({ success: true }); }
+    return makeRpcResult({});
+  });
+  stubSms();
+  const savedEnv = Object.assign({}, process.env);
+  Object.assign(process.env, stubEnv);
+  const mod = require('../netlify/functions/pma-vendor');
+  const ev = makeEvent({ body: JSON.stringify({ caller_phone: '+17025550001', action: 'propose_window', case_number: 'PMA-001',
+    proposed_start: '2026-10-29T09:00:00', proposed_end: '2026-10-29T11:00:00' }) });
+  const res = await mod.handler(ev);
+  Object.assign(process.env, savedEnv);
+  assert.equal(res.statusCode, 200);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].request_id, 'r1');
+  assert.equal(updates[0].patch.tenant_update,
+    'ABC Plumbing is scheduled for Thursday, October 29, between 9 AM and 11 AM. Please make sure someone 18 or older is home to provide access.');
+  clearStubs();
+});
+
 test('unknown action returns 400', async () => {
   clearStubs();
   stubSupabase(async (name) => {

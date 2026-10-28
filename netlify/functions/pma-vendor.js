@@ -137,6 +137,25 @@ exports.handler = async function handler(event) {
       const data = await rpc('pma_vendor_propose_window_v1', {
         vendor_id: vendorId, case_number: body.case_number,
         proposed_start: proposedStart, proposed_end: proposedEnd });
+      // When the window is confirmed, replace the tenant-facing update so it can never
+      // contradict the schedule (the manager can still edit it afterwards).
+      if (data && data.success && (data.confirmed === true || data.windowState === 'CONFIRMED') && data.scheduledStart) {
+        const t = speakTimes({ scheduledStart: data.scheduledStart, scheduledEnd: data.scheduledEnd });
+        const who = vendor.companyName ? vendor.companyName.replace(/\s+/g, ' ').trim() : 'Your service provider';
+        const when = t.scheduledEndLocal
+          ? `${t.scheduledDayLocal}, between ${t.scheduledStartLocal} and ${t.scheduledEndLocal}`
+          : `${t.scheduledDayLocal} at ${t.scheduledStartLocal}`;
+        const update = `${who} is scheduled for ${when}. Please make sure someone 18 or older is home to provide access.`;
+        const requestId = data.requestId || null;
+        try {
+          if (requestId) {
+            await rpc('pma_mgr_case_update_v1', { request_id: requestId, actor_user_id: null, patch: { tenant_update: update } });
+            data.tenantUpdated = true;
+          }
+        } catch (e) {
+          console.error(JSON.stringify({ event: 'pma_tenant_update_failed', error: e && e.message }));
+        }
+      }
       if (data && data.success && data.windowState === 'PROPOSED' && data.tenantPhone) {
         await sendVendorSms({
           to: data.tenantPhone,
