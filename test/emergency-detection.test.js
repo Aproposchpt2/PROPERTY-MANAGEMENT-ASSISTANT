@@ -29,7 +29,7 @@ const EMERGENCY_RE = new RegExp(
   'immediate\\s+(threat|danger)|' +
   '(huele|olor|oler)\\s+a\\s+gas|' +
   'fuga\\s+de\\s+gas|' +
-  'gas|' +
+  '\\bgas\\b|' +
   'incendio|fuego|humo|' +
   'mon[oó]xido|' +
   'chispas?|cortocircuito|' +
@@ -104,3 +104,9 @@ test('ES: inundacion (no accent) flags urgent', () => { assert.ok(urgent('hay un
 test('ES: inundación (with accent) flags urgent', () => { assert.ok(urgent('hay una inundación en el sotano')); });
 test('ES: fuga de gas flags urgent', () => { assert.ok(urgent('sospecho una fuga de gas en la cocina')); });
 test('ES: peligro flags urgent', () => { assert.ok(urgent('hay peligro en el edificio')); });
+
+// ── Whole-word "gas" (20261028110000_pma_emergency_gas_word_boundary) ─────────
+test('EN: standalone gas still flags urgent', () => { assert.ok(urgent('there is gas in the kitchen')); });
+test('ES: el gas still flags urgent', () => { assert.ok(urgent('el gas esta saliendo')); });
+test('EN: Las Vegas does NOT flag urgent', () => { assert.ok(!urgent('I live in Las Vegas and my dishwasher will not start')); });
+test('EN: gasket does NOT flag urgent', () => { assert.ok(!urgent('the fridge door gasket is torn')); });
