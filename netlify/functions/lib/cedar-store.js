@@ -56,6 +56,8 @@ function createStore(env = process.env) {
       rpc('pma_voice_incident_email_claim_v1', { session_id, call_sid, sip_call_id: call_sid }),
     recordEmail: ({ session_id, call_sid, message_id, outcome, error_code }) =>
       rpc('pma_voice_incident_email_result_v1', { session_id, call_sid, sip_call_id: call_sid, message_id, outcome, error_code }),
+    lookupCase: ({ caller_number, case_number }) =>
+      rpc('pma_voice_case_lookup_v1', { caller_number: caller_number || null, case_number: case_number || null }),
   };
 }
 

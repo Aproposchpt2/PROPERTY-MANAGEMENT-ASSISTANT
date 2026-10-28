@@ -262,6 +262,12 @@ exports.handler = async function handler(event) {
       }
       return respond({ ...result, notificationSent, notificationState });
     }
+    if (tool_name === 'get_case_status') {
+      const callerNum = caller_number_raw && E164_RE.test(caller_number_raw) ? caller_number_raw : null;
+      const caseNum = parameters.case_number || null;
+      const result = await store.lookupCase({ caller_number: callerNum, case_number: caseNum });
+      return respond(result || { success: false, state: 'NOT_FOUND' });
+    }
     if (tool_name === 'close_session') {
       const result = await store.close({ session_id, call_sid });
       return respond(result || { success: true, state: 'CLOSED' });

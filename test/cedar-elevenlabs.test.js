@@ -42,6 +42,12 @@ require.cache[require.resolve(storePath)] = {
         calls.push(['recordEmail', a]);
         return storeOverrides.recordEmail ? storeOverrides.recordEmail(a) : { success: true };
       },
+      lookupCase: async (a) => {
+        calls.push(['lookupCase', a]);
+        return storeOverrides.lookupCase
+          ? storeOverrides.lookupCase(a)
+          : { success: true, caseNumber: 'INC-1', status: 'OPEN', summary: 'Gas smell reported', category: 'gas', priority: 'high', createdAt: '2026-10-27T00:00:00Z' };
+      },
     }),
   },
 };
@@ -391,4 +397,68 @@ test('email staff notifications fire after successful claim', async () => {
   const tos = staffCalls.map((c) => c[1].to);
   assert.ok(tos.includes('maintenance@example.com'));
   assert.ok(tos.includes('manager@example.com'));
+});
+
+// ── get_case_status test cases ───────────────────────────────────────────────
+
+const statusBody = {
+  tool_name: 'get_case_status',
+  call_sid: 'CA_status_test',
+  conversation_id: 'conv_status_1',
+  caller_id: '+17025550100',
+};
+
+test('get_case_status found by caller ID returns case details', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.caseNumber, 'INC-1');
+  assert.equal(out.status, 'OPEN');
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.caller_number, '+17025550100');
+  assert.equal(lookup.case_number, null);
+});
+
+test('get_case_status passes case_number when caller provides it', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post({ ...statusBody, case_number: 'PMA-ABC123' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.case_number, 'PMA-ABC123');
+});
+
+test('get_case_status with invalid caller_id passes null caller_number', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post({ ...statusBody, caller_id: 'not-e164' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.caller_number, null);
+});
+
+test('get_case_status MULTIPLE_CASES returns state to Ava', async () => {
+  calls.length = 0;
+  storeOverrides.lookupCase = async () => ({ success: false, state: 'MULTIPLE_CASES', count: 3 });
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  delete storeOverrides.lookupCase;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, false);
+  assert.equal(out.state, 'MULTIPLE_CASES');
+  assert.equal(out.count, 3);
+});
+
+test('get_case_status NOT_FOUND returns not-found state', async () => {
+  calls.length = 0;
+  storeOverrides.lookupCase = async () => ({ success: false, state: 'NOT_FOUND' });
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  delete storeOverrides.lookupCase;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, false);
+  assert.equal(out.state, 'NOT_FOUND');
 });
