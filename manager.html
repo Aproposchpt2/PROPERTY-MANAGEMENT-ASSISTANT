@@ -28,6 +28,8 @@
 .badge.emergency{background:#2d0000;color:#fc8181;border:1px solid #c53030}
 .badge.warn{background:#1a1200;color:#d4a800;border:1px solid rgba(200,168,75,.5)}
 .badge.lang{background:#111;color:var(--muted);border:1px solid var(--line)}
+.badge.nte-pending{background:#0e1a2b;color:#63b3ed;border:1px solid rgba(99,179,237,.5)}
+.badge.nte-approved{background:#0a1f12;color:#68d391;border:1px solid rgba(104,211,145,.4)}
 .case-status{font-size:11px;color:var(--gold);margin-left:auto}
 .case-desc{font-size:13px;color:var(--body);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:700px}
 .case-meta{font-size:11px;color:var(--muted);margin-top:4px}
@@ -224,6 +226,14 @@ function renderCases() {
     const warn = (c.status === 'New' || c.status === 'Assigned') && age >= 24;
     const em = c.isEmergency || c.priority === 'emergency';
     const lang = (c.language || 'en').toUpperCase();
+    const nteAmt = c.nteAmount != null ? Number(c.nteAmount) : null;
+    const ntePending = nteAmt !== null && c.approvalState === 'PENDING';
+    const nteApproved = nteAmt !== null && c.approvalState === 'APPROVED';
+    const nteBadge = ntePending
+      ? `<span class="badge nte-pending">$${nteAmt.toFixed(0)} · PENDING APPROVAL</span>`
+      : nteApproved
+        ? `<span class="badge nte-approved">$${nteAmt.toFixed(0)} · APPROVED</span>`
+        : '';
     return `<div class="case-card${em ? ' emergency' : ''}" onclick="openCase('${c.id}')">
       <div class="case-row1">
         <span class="case-num">${esc(c.caseNumber || c.id.slice(0,8))}</span>
@@ -232,6 +242,7 @@ function renderCases() {
         <span class="badge lang">${lang}</span>
         <span class="case-status">${esc(c.status)}</span>
       </div>
+      ${nteBadge ? `<div style="margin-bottom:5px">${nteBadge}</div>` : ''}
       <p class="case-desc">${esc(c.reportedName || '—')}${c.scheduledStart ? ' · Scheduled ' + esc(fmtDate(c.scheduledStart)) : ''}</p>
       <div class="case-meta">${esc(c.reportedAddress || '')}${c.reportedUnit ? ' · Unit ' + esc(c.reportedUnit) : ''} · ${fmtAgo(c.createdAt)}${c.vendorName ? ' · ' + esc(c.vendorName) : ''}</div>
     </div>`;
@@ -269,6 +280,7 @@ function renderPanel(c) {
     <div class="field-row"><span class="field-label">Address / Unit</span><span class="field-val">${esc(c.reportedAddress||'')}&nbsp;${c.reportedUnit?'Unit '+esc(c.reportedUnit):''}</span></div>
     <div class="field-row"><span class="field-label">Description</span><span class="field-val">${esc(c.descriptionVerbatim||c.summary||'')}</span></div>
     <div class="field-row"><span class="field-label">Contact</span><span class="field-val muted">${esc(c.contactDestinationMasked||'—')}</span></div>
+    ${c.nteAmount != null ? `<div class="field-row"><span class="field-label">NTE Authorization</span><span class="field-val" style="color:${c.approvalState==='APPROVED'?'#68d391':c.approvalState==='PENDING'?'#63b3ed':'var(--muted)'}">$${Number(c.nteAmount).toFixed(2)} &mdash; ${esc(c.approvalState||'—')}</span></div>` : ''}
     <div class="section-sep">Status &amp; Notes</div>
     <div class="field-row"><label class="field-label" for="p-status">Status</label>
       <select class="field-input" id="p-status">
