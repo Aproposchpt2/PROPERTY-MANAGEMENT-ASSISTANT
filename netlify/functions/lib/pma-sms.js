@@ -1,6 +1,6 @@
 'use strict';
 
-async function sendCaseConfirmation({ to, caseNumber, language = 'en', env }) {
+async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLink = null, env }) {
   if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) {
     throw Object.assign(new Error('SMS_NOT_CONFIGURED'), { code: 'SMS_NOT_CONFIGURED' });
   }
@@ -9,8 +9,8 @@ async function sendCaseConfirmation({ to, caseNumber, language = 'en', env }) {
   const params = {
     to,
     body: language === 'es'
-      ? `StellarUC: Su solicitud de mantenimiento fue registrada. Caso #${caseNumber}. En caso de emergencia llame al 911. Frecuencia de mensajes variable. Pueden aplicar tarifas de mensajes y datos. Responda AYUDA para ayuda o STOP para cancelar.`
-      : `Desert Ridge Customer Care: your maintenance request is on file. Case #${caseNumber}. For emergencies call 911. Reply STOP to opt out.`,
+      ? `StellarUC: Su solicitud de mantenimiento fue registrada. Caso #${caseNumber}. En caso de emergencia llame al 911. Frecuencia de mensajes variable. Pueden aplicar tarifas de mensajes y datos. Responda AYUDA para ayuda o STOP para cancelar.${portalLink ? ' ' + portalLink : ''}`
+      : `Desert Ridge Customer Care: your maintenance request is on file. Case #${caseNumber}. For emergencies call 911. Reply STOP to opt out.${portalLink ? ' ' + portalLink : ''}`,
   };
   if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
     params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;

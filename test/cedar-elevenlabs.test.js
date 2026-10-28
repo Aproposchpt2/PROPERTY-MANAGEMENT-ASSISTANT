@@ -53,6 +53,12 @@ require.cache[require.resolve(storePath)] = {
           ? storeOverrides.lookupCase(a)
           : { success: true, caseNumber: 'INC-1', status: 'OPEN', summary: 'Gas smell reported', category: 'gas', priority: 'high', createdAt: '2026-10-27T00:00:00Z' };
       },
+      issuePortalToken: async (a) => {
+        calls.push(['issuePortalToken', a]);
+        return storeOverrides.issuePortalToken
+          ? storeOverrides.issuePortalToken(a)
+          : { success: true };
+      },
     }),
   },
 };
@@ -549,4 +555,82 @@ test('processing delay is bypassed for urgent create_incident', async () => {
   const out = JSON.parse(res.body);
   assert.equal(out.urgentReviewRequired, true);
   assert.ok(elapsed < 400, `expected no delay for urgent, got ${elapsed}ms`);
+});
+
+// ── Portal link tests ──────────────────────────────────────────────────────
+
+const portalSmsBody = {
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_portal_sms_1',
+  conversation_id: 'conv_portal_sms_1',
+  caller_id: '+17025550100',
+  method: 'sms',
+  destination: '+17025550100',
+  consent: true,
+};
+
+const portalEmailBody = {
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_portal_email_1',
+  conversation_id: 'conv_portal_email_1',
+  caller_id: '+17025550100',
+  method: 'email',
+  destination: 'tenant@example.com',
+  consent: true,
+};
+
+test('issuePortalToken is called with a 64-char hex hash on SMS confirmation', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  const res = await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const tokenCall = calls.find(c => c[0] === 'issuePortalToken');
+  assert.ok(tokenCall, 'issuePortalToken should be called');
+  assert.match(tokenCall[1].token_hash, /^[0-9a-f]{64}$/, 'token_hash must be 64-char hex (SHA-256)');
+  assert.ok(tokenCall[1].request_id, 'request_id must be present');
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('portal link is passed to sendCaseConfirmation on SMS path', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  const smsCall = calls.find(c => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall, 'sendCaseConfirmation should be called');
+  const link = smsCall[1].portalLink;
+  if (link !== null) assert.match(link, /^https:\/\/pma\.stellaruc\.com\/status\?t=/, 'portal link must be correct URL');
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('portal link is null and not sent when issuePortalToken returns {exists:true}', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.issuePortalToken = async () => ({ exists: true });
+  await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  const smsCall = calls.find(c => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall);
+  assert.equal(smsCall[1].portalLink, null, 'portal link must be null when token already exists');
+  delete storeOverrides.issuePortalToken;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('portal token failure does not break SMS confirmation', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.issuePortalToken = async () => { throw new Error('DB_TIMEOUT'); };
+  const res = await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.notificationSent, true, 'SMS should still send even when portal token fails');
+  delete storeOverrides.issuePortalToken;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('issuePortalToken is called on email confirmation path', async () => {
+  calls.length = 0;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  await post(portalEmailBody, { 'x-pma-tool-key': KEY });
+  const tokenCall = calls.find(c => c[0] === 'issuePortalToken');
+  assert.ok(tokenCall, 'issuePortalToken should be called on email path');
+  delete process.env.PMA_EMAIL_ENABLED;
 });

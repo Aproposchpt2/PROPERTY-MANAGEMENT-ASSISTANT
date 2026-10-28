@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PMA Manager | Stellar Intelligent Technologies</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/pma-site.css">
+<style>
+.mgr-shell{max-width:1200px;margin:0 auto;padding:0 22px 60px}
+.mgr-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;border-bottom:1px solid var(--line)}
+.mgr-header h1{font:500 32px 'Cormorant Garamond',serif;margin:0}
+.mgr-user{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:16px}
+.btn-sm{background:none;border:1px solid var(--line);color:var(--body);padding:7px 14px;font-size:12px;cursor:pointer}
+.btn-sm:hover{border-color:var(--gold);color:var(--light)}
+.btn-primary{background:var(--gold);border:none;color:#050505;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-primary:hover{background:var(--light)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
+.chip{background:none;border:1px solid var(--line);color:var(--muted);padding:6px 14px;font-size:12px;cursor:pointer}
+.chip.active{border-color:var(--gold);color:var(--light)}
+.case-grid{display:flex;flex-direction:column;gap:10px}
+.case-card{border:1px solid var(--line);background:#101010;padding:18px 20px;cursor:pointer;transition:border-color .2s}
+.case-card:hover{border-color:rgba(200,168,75,.6)}
+.case-card.emergency{border-left:3px solid #c53030}
+.case-row1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.case-num{font:500 22px 'Cormorant Garamond',serif;color:var(--ivory)}
+.badge{font:400 9px 'Syncopate',sans-serif;padding:3px 8px;letter-spacing:.06em}
+.badge.emergency{background:#2d0000;color:#fc8181;border:1px solid #c53030}
+.badge.warn{background:#1a1200;color:#d4a800;border:1px solid rgba(200,168,75,.5)}
+.badge.lang{background:#111;color:var(--muted);border:1px solid var(--line)}
+.case-status{font-size:11px;color:var(--gold);margin-left:auto}
+.case-desc{font-size:13px;color:var(--body);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:700px}
+.case-meta{font-size:11px;color:var(--muted);margin-top:4px}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(620px,100vw);background:#111;border-left:1px solid var(--line);overflow-y:auto;z-index:50;transform:translateX(100%);transition:transform .3s}
+.panel.open{transform:none}
+.panel-head{display:flex;align-items:center;gap:12px;padding:22px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#111;z-index:5}
+.panel-head h2{font:500 28px 'Cormorant Garamond',serif;margin:0;flex:1}
+.panel-body{padding:24px}
+.field-row{margin-bottom:18px}
+.field-label{font:400 10px 'Syncopate',sans-serif;color:var(--gold);letter-spacing:.07em;display:block;margin-bottom:6px}
+.field-val{font-size:14px;color:var(--ivory);line-height:1.6}
+.field-val.muted{color:var(--muted)}
+.field-input{width:100%;background:#1a1a1a;border:1px solid var(--line);color:var(--ivory);padding:10px 14px;font:400 14px 'DM Sans',sans-serif;resize:vertical}
+.field-input:focus{outline:none;border-color:var(--gold)}
+select.field-input{appearance:none;cursor:pointer}
+.section-sep{font:400 10px 'Syncopate',sans-serif;color:var(--gold);letter-spacing:.07em;border-top:1px solid var(--line);padding-top:20px;margin:24px 0 14px}
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(200,168,75,.12)}
+.tl-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:0 0 8px;margin-top:6px}
+.tl-text{font-size:13px;color:var(--body)}.tl-time{font-size:11px;color:var(--muted)}
+.vendor-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.vendor-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);background:#101010;font-size:13px}
+.vendor-row .vname{flex:1;color:var(--ivory)}.vendor-row .vtrade{color:var(--muted);font-size:12px}
+.login-wrap{max-width:440px;margin:140px auto;padding:0 22px}
+.login-card{border:1px solid var(--line);background:#101010;padding:40px}
+.login-card h1{font:500 44px 'Cormorant Garamond',serif;margin:0 0 8px}
+.login-card p{color:var(--body);font-size:14px;margin:0 0 28px}
+.login-msg{font-size:13px;color:var(--gold);margin-top:14px;min-height:20px}
+.overlay{position:fixed;inset:0;background:rgba(5,5,5,.6);z-index:40;display:none}
+.overlay.open{display:block}
+.vendor-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(500px,92vw);background:#131313;border:1px solid var(--line);padding:32px;z-index:60;display:none}
+.vendor-modal.open{display:block}
+.empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="ribbon"><span>STELLAR INTELLIGENT TECHNOLOGIES</span><span>PROPERTY MANAGEMENT ASSISTANT · MANAGER</span></div>
+
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-wrap">
+    <div class="login-card">
+      <h1>Manager Login</h1>
+      <p>Enter your email to receive a secure sign-in link.</p>
+      <input class="field-input" id="login-email" type="email" placeholder="you@example.com" style="margin-bottom:12px">
+      <button class="btn-primary" style="width:100%" onclick="sendMagicLink()">Send Sign-In Link</button>
+      <p class="login-msg" id="login-msg"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" style="display:none">
+  <div class="mgr-shell">
+    <div class="mgr-header">
+      <h1>Case Queue</h1>
+      <div class="mgr-user">
+        <span id="user-email-display"></span>
+        <button class="btn-sm" onclick="openVendorMgr()">Vendors</button>
+        <button class="btn-sm" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+    <div class="chips">
+      <button class="chip active" onclick="setFilter(null,this)">All</button>
+      <button class="chip" onclick="setFilter('New',this)">New</button>
+      <button class="chip" onclick="setFilter('Assigned',this)">Assigned</button>
+      <button class="chip" onclick="setFilter('Scheduled',this)">Scheduled</button>
+      <button class="chip" onclick="setFilter('In Progress',this)">In Progress</button>
+      <button class="chip" onclick="setFilter('Completed',this)">Completed</button>
+      <button class="chip" onclick="setFilter('Closed',this)">Closed</button>
+    </div>
+    <div id="case-list" class="case-grid"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Case Detail Panel -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<aside class="panel" id="case-panel" role="dialog" aria-modal="true">
+  <div class="panel-head">
+    <h2 id="panel-case-num"></h2>
+    <button class="btn-sm" onclick="closePanel()">Close</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
+
+<!-- Vendor Manager Modal -->
+<div class="vendor-modal" id="vendor-modal">
+  <div style="display:flex;align-items:center;margin-bottom:20px">
+    <h2 style="font:500 30px 'Cormorant Garamond',serif;margin:0;flex:1">Vendors</h2>
+    <button class="btn-sm" onclick="closeVendorMgr()">Close</button>
+  </div>
+  <div id="vendor-list-wrap" class="vendor-list"></div>
+  <div class="section-sep">Add / Update Vendor</div>
+  <div class="field-row"><label class="field-label">Company Name</label><input class="field-input" id="v-name" placeholder="ABC Plumbing"></div>
+  <div class="field-row"><label class="field-label">Trade</label><input class="field-input" id="v-trade" placeholder="plumbing"></div>
+  <div class="field-row"><label class="field-label">Phone (E.164)</label><input class="field-input" id="v-phone" placeholder="+17025551234"></div>
+  <div class="field-row"><label class="field-label">Status</label>
+    <select class="field-input" id="v-status"><option value="active">Active</option><option value="inactive">Inactive</option></select>
+  </div>
+  <button class="btn-primary" onclick="upsertVendor()">Save Vendor</button>
+  <p id="vendor-msg" style="font-size:13px;color:var(--gold);margin-top:10px;min-height:18px"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
+<script>
+const SB_URL = 'https://vqrqyanqsiqzsmlhytaz.supabase.co';
+const SB_KEY = 'sb_publishable_S0l5GIDgAiECvhL-03FUkA_r8kjUjr9';
+const sb = supabase.createClient(SB_URL, SB_KEY, { auth: { flowType: 'pkce' } });
+
+let _session = null, _filter = null, _cases = [], _vendors = [], _openCaseId = null;
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    _session = session;
+    showDashboard();
+  }
+  sb.auth.onAuthStateChange((_e, s) => {
+    _session = s;
+    if (s) showDashboard(); else showLogin();
+  });
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('dashboard').style.display = 'none';
+}
+
+function showDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = '';
+  document.getElementById('user-email-display').textContent = _session?.user?.email || '';
+  loadCases();
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('login-email').value.trim();
+  const msg = document.getElementById('login-msg');
+  if (!email) { msg.textContent = 'Enter your email address.'; return; }
+  msg.textContent = 'Sending…';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: location.origin + '/manager' }
+  });
+  msg.textContent = error ? 'Error: ' + error.message : 'Check your email for a sign-in link.';
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  showLogin();
+}
+
+function bearer() { return { Authorization: 'Bearer ' + (_session?.access_token || '') }; }
+
+async function apiFetch(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { 'content-type': 'application/json', ...bearer(), ...(opts.headers || {}) } });
+  return r.json();
+}
+
+async function loadCases() {
+  const el = document.getElementById('case-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const params = _filter ? '?status=' + encodeURIComponent(_filter) : '';
+  const d = await apiFetch('/api/manager/cases' + params);
+  _cases = (d.success && d.cases) ? d.cases : [];
+  renderCases();
+}
+
+function renderCases() {
+  const el = document.getElementById('case-list');
+  if (!_cases.length) { el.innerHTML = '<div class="empty">No cases found.</div>'; return; }
+  const now = Date.now();
+  el.innerHTML = _cases.map(c => {
+    const age = c.created_at ? (now - new Date(c.created_at)) / 36e5 : 0;
+    const warn = (c.status === 'New' || c.status === 'Assigned') && age >= 24;
+    const em = c.is_emergency || c.priority === 'emergency';
+    const lang = (c.language || 'en').toUpperCase();
+    return `<div class="case-card${em ? ' emergency' : ''}" onclick="openCase('${c.id}')">
+      <div class="case-row1">
+        <span class="case-num">${esc(c.case_number || c.id.slice(0,8))}</span>
+        ${em ? '<span class="badge emergency">EMERGENCY</span>' : ''}
+        ${warn ? '<span class="badge warn">UNSCHEDULED 24H+</span>' : ''}
+        <span class="badge lang">${lang}</span>
+        <span class="case-status">${esc(c.status)}</span>
+      </div>
+      <p class="case-desc">${esc(c.description || '—')}</p>
+      <div class="case-meta">${esc(c.reported_address || '')}${c.reported_unit ? ' · Unit ' + esc(c.reported_unit) : ''} · ${fmtAgo(c.created_at)}${c.company_name ? ' · ' + esc(c.company_name) : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function setFilter(val, btn) {
+  _filter = val;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  loadCases();
+}
+
+async function openCase(id) {
+  _openCaseId = id;
+  const d = await apiFetch('/api/manager/cases/' + id);
+  if (!d.success) return;
+  const c = d.case;
+  const vendD = await apiFetch('/api/manager/vendors');
+  _vendors = (vendD.success && vendD.vendors) ? vendD.vendors : [];
+  renderPanel(c);
+  document.getElementById('panel-case-num').textContent = c.caseNumber || id.slice(0,8);
+  document.getElementById('case-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+function renderPanel(c) {
+  const vendOpts = _vendors.map(v => `<option value="${v.id}" ${c.vendorId === v.id ? 'selected' : ''}>${esc(v.company_name || v.name || '')}</option>`).join('');
+  const timeline = (c.timeline || []).map(t =>
+    `<div class="tl-item"><div class="tl-dot"></div><div><div class="tl-text">${esc(t.description || t.event_type)}</div><div class="tl-time">${fmtDate(t.createdAt || t.created_at)}</div></div></div>`
+  ).join('') || '<p style="color:var(--muted);font-size:13px">No activity yet.</p>';
+
+  document.getElementById('panel-body').innerHTML = `
+    <div class="field-row"><span class="field-label">Reported</span><span class="field-val">${fmtDate(c.createdAt)}</span></div>
+    <div class="field-row"><span class="field-label">Address / Unit</span><span class="field-val">${esc(c.reportedAddress||'')}&nbsp;${c.reportedUnit?'Unit '+esc(c.reportedUnit):''}</span></div>
+    <div class="field-row"><span class="field-label">Description</span><span class="field-val">${esc(c.description||'')}</span></div>
+    <div class="field-row"><span class="field-label">Contact</span><span class="field-val muted">${esc(c.contactMasked||'—')}</span></div>
+    <div class="section-sep">Status &amp; Notes</div>
+    <div class="field-row"><label class="field-label" for="p-status">Status</label>
+      <select class="field-input" id="p-status">
+        ${['New','Assigned','Scheduled','In Progress','Completed','Closed'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
+      </select></div>
+    <div class="field-row"><label class="field-label" for="p-update">Tenant Update (visible to tenant)</label>
+      <textarea class="field-input" id="p-update" rows="3" maxlength="1000">${esc(c.tenantUpdate||'')}</textarea></div>
+    <div class="field-row"><label class="field-label" for="p-notes">Internal Notes (managers only)</label>
+      <textarea class="field-input" id="p-notes" rows="3" maxlength="4000">${esc(c.internalNotes||'')}</textarea></div>
+    <button class="btn-primary" onclick="saveCase('${c.id}')">Save</button>
+    <span id="case-save-msg" style="font-size:13px;color:var(--gold);margin-left:12px"></span>
+    <div class="section-sep">Vendor Assignment</div>
+    <div class="field-row"><label class="field-label" for="p-vendor">Vendor</label>
+      <select class="field-input" id="p-vendor"><option value="">— None —</option>${vendOpts}</select></div>
+    <div class="field-row"><label class="field-label" for="p-sched-start">Scheduled Start</label>
+      <input class="field-input" type="datetime-local" id="p-sched-start" value="${toLocalInput(c.scheduledStart)}"></div>
+    <div class="field-row"><label class="field-label" for="p-sched-end">Scheduled End</label>
+      <input class="field-input" type="datetime-local" id="p-sched-end" value="${toLocalInput(c.scheduledEnd)}"></div>
+    <div class="field-row"><label class="field-label" for="p-wo">Work Order #</label>
+      <input class="field-input" id="p-wo" maxlength="100" value="${esc(c.workOrderRef||'')}"></div>
+    <button class="btn-primary" onclick="assignVendor('${c.id}')">Assign</button>
+    <span id="assign-msg" style="font-size:13px;color:var(--gold);margin-left:12px"></span>
+    <div class="section-sep">Activity Timeline</div>
+    <div class="timeline">${timeline}</div>`;
+}
+
+async function saveCase(id) {
+  const msg = document.getElementById('case-save-msg');
+  msg.textContent = 'Saving…';
+  const patch = {
+    status: document.getElementById('p-status').value,
+    tenant_update: document.getElementById('p-update').value,
+    internal_notes: document.getElementById('p-notes').value,
+  };
+  const d = await apiFetch('/api/manager/cases/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
+  msg.textContent = d.success ? 'Saved.' : ('Error: ' + (d.error || 'unknown'));
+  if (d.success) loadCases();
+  setTimeout(() => { msg.textContent = ''; }, 3000);
+}
+
+async function assignVendor(id) {
+  const msg = document.getElementById('assign-msg');
+  const vid = document.getElementById('p-vendor').value;
+  if (!vid) { msg.textContent = 'Select a vendor.'; return; }
+  msg.textContent = 'Assigning…';
+  const body = {
+    vendor_id: vid,
+    scheduled_start: document.getElementById('p-sched-start').value || null,
+    scheduled_end: document.getElementById('p-sched-end').value || null,
+    work_order_ref: document.getElementById('p-wo').value || null,
+  };
+  const d = await apiFetch('/api/manager/cases/' + id + '/assign', { method: 'POST', body: JSON.stringify(body) });
+  msg.textContent = d.success ? 'Assigned.' : ('Error: ' + (d.error || 'unknown'));
+  if (d.success) { loadCases(); openCase(id); }
+  setTimeout(() => { msg.textContent = ''; }, 3000);
+}
+
+function closePanel() {
+  document.getElementById('case-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+async function openVendorMgr() {
+  const d = await apiFetch('/api/manager/vendors');
+  _vendors = (d.success && d.vendors) ? d.vendors : [];
+  const el = document.getElementById('vendor-list-wrap');
+  el.innerHTML = _vendors.length ? _vendors.map(v =>
+    `<div class="vendor-row"><span class="vname">${esc(v.company_name||v.name||'')}</span><span class="vtrade">${esc(v.trade||'')}</span><span style="font-size:11px;color:var(--muted);margin-left:auto">${esc(v.status||'')}</span></div>`
+  ).join('') : '<p style="color:var(--muted);font-size:13px">No vendors yet.</p>';
+  document.getElementById('vendor-modal').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeVendorMgr() {
+  document.getElementById('vendor-modal').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+async function upsertVendor() {
+  const msg = document.getElementById('vendor-msg');
+  const body = {
+    name: document.getElementById('v-name').value.trim(),
+    trade: document.getElementById('v-trade').value.trim(),
+    phone: document.getElementById('v-phone').value.trim(),
+    status: document.getElementById('v-status').value,
+  };
+  if (!body.name || !body.trade || !body.phone) { msg.textContent = 'Name, trade, and phone required.'; return; }
+  msg.textContent = 'Saving…';
+  const d = await apiFetch('/api/manager/vendors', { method: 'POST', body: JSON.stringify(body) });
+  msg.textContent = d.success ? 'Saved.' : ('Error: ' + (d.error || 'unknown'));
+  if (d.success) openVendorMgr();
+  setTimeout(() => { msg.textContent = ''; }, 3000);
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }
+  catch { return iso; }
+}
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const h = (Date.now() - new Date(iso)) / 36e5;
+  if (h < 1) return Math.round(h * 60) + 'm ago';
+  if (h < 24) return Math.round(h) + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+function toLocalInput(iso) {
+  if (!iso) return '';
+  try { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+  catch { return ''; }
+}
+
+init();
+</script>
+<footer><div><strong>STELLAR INTELLIGENT TECHNOLOGIES</strong><span>Operated by Apropos Group LLC</span></div><div><p>Property Management Assistant</p></div></footer>
+</body></html>

@@ -62,6 +62,8 @@ function createStore(env = process.env) {
       rpc('pma_call_log_insert_v1', { conversation_id, agent_id, call_duration_secs, credits_used: credits_used || null, twilio_cost_usd: twilio_cost_usd || null, termination_reason: termination_reason || null, call_successful: call_successful || null, started_at: started_at || null }),
     callLogSummary: () =>
       rpc('pma_call_log_summary_v1', {}),
+    issuePortalToken: ({ request_id, token_hash }) =>
+      rpc('pma_portal_token_issue_v1', { request_id, token_hash }),
   };
 }
 

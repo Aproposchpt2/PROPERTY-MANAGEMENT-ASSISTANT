@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Request Status | Stellar Intelligent Technologies</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/pma-site.css">
+<style>
+.status-shell{max-width:700px;margin:80px auto;padding:0 22px 60px}
+.status-card{border:1px solid var(--line);background:#101010;padding:32px}
+.status-card h1{font:500 38px/1.1 'Cormorant Garamond',serif;margin:0 0 6px;color:var(--ivory)}
+.status-meta{font-size:13px;color:var(--muted);margin:0 0 28px}
+.emergency-banner{background:#2d0000;border:1px solid #c53030;padding:16px 20px;margin-bottom:24px}
+.emergency-banner p{margin:0;color:#fc8181;font-weight:600;font-size:14px}
+.stepper{display:flex;gap:0;margin:24px 0;overflow-x:auto}
+.step{flex:1;min-width:0;padding:12px 8px;text-align:center;border-top:3px solid var(--line);position:relative}
+.step.done{border-top-color:var(--gold)}
+.step.active{border-top-color:var(--light)}
+.step-label{font-size:11px;color:var(--muted);white-space:nowrap}
+.step.done .step-label,.step.active .step-label{color:var(--light)}
+.info-row{display:flex;flex-direction:column;gap:4px;margin:16px 0}
+.info-label{font:400 10px/1.5 'Syncopate',sans-serif;letter-spacing:.07em;color:var(--gold)}
+.info-val{font-size:15px;color:var(--ivory)}
+.update-box{border-left:2px solid var(--gold);padding:14px 18px;background:#141414;margin-top:20px}
+.update-box p{margin:0;font-size:14px;color:var(--body);line-height:1.7}
+.invalid-msg{text-align:center;padding:60px 0}
+.invalid-msg h2{font:500 36px 'Cormorant Garamond',serif;color:var(--ivory)}
+.invalid-msg p{color:var(--body);font-size:15px}
+.lang-toggle{display:flex;gap:8px;margin-bottom:24px}
+.lang-btn{background:none;border:1px solid var(--line);color:var(--muted);padding:6px 14px;font-size:12px;cursor:pointer}
+.lang-btn.active{border-color:var(--gold);color:var(--light)}
+.loading{color:var(--muted);font-size:14px;text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="ribbon"><span>STELLAR INTELLIGENT TECHNOLOGIES</span><span>TENANT PORTAL · REQUEST STATUS</span></div>
+<div class="status-shell">
+  <div id="loading" class="loading">Loading your request status…</div>
+  <div id="invalid" class="invalid-msg" style="display:none">
+    <h2 id="invalid-title">Link Not Active</h2>
+    <p id="invalid-body">This link is no longer active. Call <strong>(725) 201-0584</strong> for an update.</p>
+  </div>
+  <div id="portal" style="display:none">
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btn-en" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" id="btn-es" onclick="setLang('es')">ES</button>
+    </div>
+    <div id="emergency-banner" class="emergency-banner" style="display:none">
+      <p id="emergency-text">If you are in danger, leave the area and call 911.</p>
+    </div>
+    <div class="status-card">
+      <h1 id="case-number"></h1>
+      <p class="status-meta" id="reported-date"></p>
+      <div class="stepper" id="stepper" aria-label="Request progress"></div>
+      <div id="vendor-row" class="info-row" style="display:none">
+        <span class="info-label" id="label-vendor">Service Provider</span>
+        <span class="info-val" id="vendor-name"></span>
+      </div>
+      <div id="schedule-row" class="info-row" style="display:none">
+        <span class="info-label" id="label-scheduled">Scheduled</span>
+        <span class="info-val" id="scheduled-time"></span>
+      </div>
+      <div id="update-section" class="update-box" style="display:none">
+        <span class="info-label" id="label-update" style="display:block;margin-bottom:8px">Latest Update</span>
+        <p id="tenant-update"></p>
+      </div>
+    </div>
+  </div>
+</div>
+<footer><div><strong>STELLAR INTELLIGENT TECHNOLOGIES</strong><span>Operated by Apropos Group LLC</span></div><div><p>Property Management Assistant</p><a href="/privacy.html">Privacy</a> <a href="/terms.html">Terms</a></div></footer>
+<script>
+const STEPS_EN = ['New','Scheduled','In Progress','Completed'];
+const STEPS_ES = ['Nuevo','Programado','En Progreso','Completado'];
+const STATUS_MAP = {'New':0,'Assigned':0,'Scheduled':1,'In Progress':2,'Completed':3,'Closed':3};
+const LABELS_EN = {vendor:'Service Provider',scheduled:'Scheduled',update:'Latest Update'};
+const LABELS_ES = {vendor:'Proveedor de Servicio',scheduled:'Programado',update:'Ultima Actualizacion'};
+let _data = null, _lang = 'en';
+
+function getToken() { return new URLSearchParams(location.search).get('t') || ''; }
+
+function setLang(l) {
+  _lang = l;
+  document.getElementById('btn-en').className = 'lang-btn' + (l==='en'?' active':'');
+  document.getElementById('btn-es').className = 'lang-btn' + (l==='es'?' active':'');
+  if (_data) render(_data);
+}
+
+function fmtDate(iso, tz) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('en-US', {timeZone:tz||'America/Los_Angeles',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+  } catch { return iso; }
+}
+
+function fmtWindow(start, end, tz) {
+  if (!start) return '';
+  const opts = {timeZone:tz||'America/Los_Angeles',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'};
+  const s = new Date(start).toLocaleString('en-US',opts);
+  if (!end) return s;
+  const eTime = new Date(end).toLocaleString('en-US',{timeZone:tz||'America/Los_Angeles',hour:'numeric',minute:'2-digit'});
+  return s + ' – ' + eTime;
+}
+
+function render(d) {
+  const isEs = _lang === 'es';
+  const labels = isEs ? LABELS_ES : LABELS_EN;
+  const steps = isEs ? STEPS_ES : STEPS_EN;
+  const stepIndex = STATUS_MAP[d.status] ?? 0;
+
+  document.getElementById('case-number').textContent = d.caseNumber || '';
+  const rLabel = isEs ? 'Reportado: ' : 'Reported: ';
+  document.getElementById('reported-date').textContent = rLabel + fmtDate(d.createdAt, d.propertyTimezone);
+
+  const banner = document.getElementById('emergency-banner');
+  if (d.isEmergency) {
+    banner.style.display = '';
+    document.getElementById('emergency-text').textContent = isEs
+      ? 'Si esta en peligro, salga del area y llame al 911.'
+      : 'If you are in danger, leave the area and call 911.';
+  } else { banner.style.display = 'none'; }
+
+  const stepper = document.getElementById('stepper');
+  stepper.innerHTML = '';
+  steps.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'step' + (i < stepIndex ? ' done' : i === stepIndex ? ' active' : '');
+    const lbl = document.createElement('span');
+    lbl.className = 'step-label';
+    lbl.textContent = s;
+    div.appendChild(lbl);
+    stepper.appendChild(div);
+  });
+
+  const vRow = document.getElementById('vendor-row');
+  if (d.vendorName) {
+    vRow.style.display = '';
+    document.getElementById('label-vendor').textContent = labels.vendor;
+    document.getElementById('vendor-name').textContent = d.vendorName;
+  } else { vRow.style.display = 'none'; }
+
+  const sRow = document.getElementById('schedule-row');
+  if (d.scheduledStart) {
+    sRow.style.display = '';
+    document.getElementById('label-scheduled').textContent = labels.scheduled;
+    document.getElementById('scheduled-time').textContent = fmtWindow(d.scheduledStart, d.scheduledEnd, d.propertyTimezone);
+  } else { sRow.style.display = 'none'; }
+
+  const uSection = document.getElementById('update-section');
+  if (d.tenantUpdate) {
+    uSection.style.display = '';
+    document.getElementById('label-update').textContent = labels.update;
+    document.getElementById('tenant-update').textContent = d.tenantUpdate;
+  } else { uSection.style.display = 'none'; }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('invalid').style.display = 'none';
+  document.getElementById('portal').style.display = '';
+}
+
+async function load() {
+  const t = getToken();
+  if (!t) { showInvalid(); return; }
+  try {
+    const res = await fetch('/api/portal/case?t=' + encodeURIComponent(t));
+    if (res.status === 404) { showInvalid(); return; }
+    const d = await res.json();
+    if (!d || !d.success) { showInvalid(); return; }
+    _data = d;
+    _lang = d.language === 'es' ? 'es' : 'en';
+    render(d);
+  } catch { showInvalid(); }
+}
+
+function showInvalid() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('invalid').style.display = '';
+}
+
+load();
+let _poll = setInterval(() => { if (document.visibilityState !== 'hidden') load(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+</script>
+</body></html>

@@ -48,3 +48,15 @@
   to = "/.netlify/functions/cedar-call-log"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/manager/*"
+  to = "/.netlify/functions/pma-manager-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/portal/*"
+  to = "/.netlify/functions/pma-portal-api"
+  status = 200
+  force = true

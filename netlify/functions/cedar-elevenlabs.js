@@ -91,6 +91,22 @@ function errorResponse(toolCallId, state, reply, envelope = true) {
   return toolResponse(toolCallId, { success: false, state, ...(reply ? { reply } : {}) }, envelope);
 }
 
+// Generate a portal token, issue it to the DB, return the full URL or null on failure.
+// The raw token is NEVER logged or returned to ElevenLabs (it appears in transcripts).
+async function issuePortalLink(store, requestId, env) {
+  if (!requestId) return null;
+  try {
+    const rawToken = crypto.randomBytes(16).toString('base64url').slice(0, 22);
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const result = await store.issuePortalToken({ request_id: requestId, token_hash: tokenHash });
+    if (result && result.exists) return null; // live token already exists; don't send a second link
+    return `https://pma.stellaruc.com/status?t=${rawToken}`;
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'cedar_portal_token_failed', error: err?.message }));
+    return null;
+  }
+}
+
 // E.164 pattern required by pma_voice_session_start_v1.
 const E164_RE = /^\+[1-9][0-9]{7,14}$/;
 // Printable ASCII pattern required for call_sid.
@@ -203,9 +219,10 @@ exports.handler = async function handler(event) {
           if (!claim || !claim.success) {
             return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
           }
+          const portalLink = await issuePortalLink(store, claim.requestId, env);
           const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
           try {
-            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, env });
+            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, portalLink, env });
             notificationSent = true;
             notificationState = 'SENT';
             try {
@@ -242,9 +259,10 @@ exports.handler = async function handler(event) {
         if (!claim || !claim.success) {
           return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
         }
+        const portalLinkEmail = await issuePortalLink(store, claim.requestId, env);
         const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-email');
         try {
-          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, env });
+          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, portalLink: portalLinkEmail, env });
           notificationSent = true;
           notificationState = 'SENT';
           try {

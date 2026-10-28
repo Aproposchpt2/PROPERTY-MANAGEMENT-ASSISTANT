@@ -86,7 +86,7 @@ const STAFF_SUBJECT = (caseNumber) => `Desert Ridge PMA: New maintenance case #$
 const STAFF_TEXT = (caseNumber) =>
   `Desert Ridge PMA: New maintenance case #${caseNumber} filed. Review in your system for details.`;
 
-async function sendCaseConfirmation({ to, caseNumber, language = 'en', env }) {
+async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLink = null, env }) {
   if (!env.RESEND_API_KEY) {
     throw Object.assign(new Error('EMAIL_NOT_CONFIGURED'), { code: 'EMAIL_NOT_CONFIGURED' });
   }
@@ -97,13 +97,19 @@ async function sendCaseConfirmation({ to, caseNumber, language = 'en', env }) {
   let result;
   try {
     const isEs = language === 'es';
+    const linkHtml = portalLink
+      ? `<tr><td style="padding:20px 32px 0"><p style="margin:0;font-size:14px;color:#4a5568">${isEs ? 'Siga el estado de su solicitud:' : 'Track your request status:'} <a href="${portalLink}" style="color:#2b6cb0">${isEs ? 'Ver estado' : 'View status'}</a></p></td></tr>`
+      : '';
+    const linkText = portalLink ? (isEs ? `\nSiga el estado: ${portalLink}` : `\nTrack status: ${portalLink}`) : '';
+    const baseHtml = isEs ? TENANT_HTML_ES(caseNumber) : TENANT_HTML(caseNumber);
+    const html = linkHtml ? baseHtml.replace('</table>\n</body>', `${linkHtml}\n</table>\n</body>`) : baseHtml;
     result = await Promise.race([
       resend.emails.send({
         from: env.RESEND_FROM_EMAIL,
         to: [to],
         subject: isEs ? TENANT_SUBJECT_ES(caseNumber) : TENANT_SUBJECT(caseNumber),
-        html: isEs ? TENANT_HTML_ES(caseNumber) : TENANT_HTML(caseNumber),
-        text: isEs ? TENANT_TEXT_ES(caseNumber) : TENANT_TEXT(caseNumber),
+        html,
+        text: (isEs ? TENANT_TEXT_ES(caseNumber) : TENANT_TEXT(caseNumber)) + linkText,
       }),
       new Promise((_, reject) =>
         setTimeout(() => reject(Object.assign(new Error('EMAIL_TIMEOUT'), { code: 'EMAIL_TIMEOUT' })), 8000)
