@@ -78,6 +78,10 @@ require.cache[require.resolve(smsPath)] = {
     sendStaffNotification: async (a) => {
       calls.push(['sendStaffNotification', a]);
     },
+    sendEmergencyEscalation: async (a) => {
+      calls.push(['sendEmergencyEscalation', a]);
+      if (smsOverrides.sendEmergencyEscalation) return smsOverrides.sendEmergencyEscalation(a);
+    },
   },
 };
 
@@ -633,4 +637,97 @@ test('issuePortalToken is called on email confirmation path', async () => {
   const tokenCall = calls.find(c => c[0] === 'issuePortalToken');
   assert.ok(tokenCall, 'issuePortalToken should be called on email path');
   delete process.env.PMA_EMAIL_ENABLED;
+});
+
+// ── Emergency escalation tests ──────────────────────────────────────────────
+
+test('emergency escalation fires sendEmergencyEscalation to both staff numbers when urgentReviewRequired', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+17025550202';
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-1',
+    urgentReviewRequired: true,
+    reply: 'Help is on the way.',
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  // Give the fire-and-forget Promise.allSettled a tick to resolve
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.urgentReviewRequired, true);
+  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 2, 'two emergency escalations should fire (maintenance + manager)');
+  const tos = escalations.map(c => c[1].to).sort();
+  assert.deepEqual(tos, ['+17025550201', '+17025550202'].sort());
+  escalations.forEach(([, args]) => {
+    assert.equal(args.caseNumber, 'INC-EMR-1');
+    assert.equal(args.address, incidentBody.reportedAddress);
+    assert.equal(args.description, incidentBody.description);
+    assert.equal(args.callerPhone, incidentBody.caller_id);
+  });
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+});
+
+test('emergency escalation does NOT fire when PMA_SMS_ENABLED is not true', async () => {
+  calls.length = 0;
+  delete process.env.PMA_SMS_ENABLED;
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-2',
+    urgentReviewRequired: true,
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 0, 'no escalation when SMS disabled');
+  delete storeOverrides.createIncident;
+});
+
+test('emergency escalation does NOT fire for non-emergency incidents', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-NORMAL-1',
+    urgentReviewRequired: false,
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 0, 'no escalation for normal priority incident');
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('emergency escalation failure does not affect the response returned to Ava', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  smsOverrides.sendEmergencyEscalation = async () => { throw new Error('TWILIO_DOWN'); };
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-3',
+    urgentReviewRequired: true,
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200, 'response must be 200 even if escalation SMS fails');
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true, 'success must be true even if escalation SMS fails');
+  delete smsOverrides.sendEmergencyEscalation;
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
 });

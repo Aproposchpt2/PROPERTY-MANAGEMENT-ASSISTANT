@@ -211,6 +211,29 @@ exports.handler = async function handler(event) {
         const delayMs = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 4000) : 2500;
         if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
       }
+      // ── Emergency escalation ─────────────────────────────────────────────────
+      // Fire-and-forget: alert on-call staff immediately when urgentReviewRequired.
+      // Does NOT await — Ava must respond to the caller without blocking.
+      if (result && result.urgentReviewRequired && env.PMA_SMS_ENABLED === 'true') {
+        const { sendEmergencyEscalation } = require('./lib/pma-sms');
+        const escalationArgs = {
+          caseNumber: result.caseNumber,
+          address: args.reportedAddress || null,
+          description: args.description || null,
+          callerPhone: caller_number_raw || null,
+          env,
+        };
+        Promise.allSettled([
+          sendEmergencyEscalation({ to: env.PMA_SMS_MAINTENANCE_NUMBER, ...escalationArgs }),
+          sendEmergencyEscalation({ to: env.PMA_SMS_MANAGER_NUMBER, ...escalationArgs }),
+        ]).then(results => {
+          results.forEach((r, i) => {
+            if (r.status === 'rejected') {
+              console.error(JSON.stringify({ event: 'cedar_emergency_escalation_failed', index: i, error: r.reason?.message }));
+            }
+          });
+        });
+      }
       return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
     }
     if (tool_name === 'record_contact_preference') {

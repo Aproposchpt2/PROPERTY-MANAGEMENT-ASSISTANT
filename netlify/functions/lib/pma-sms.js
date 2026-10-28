@@ -106,4 +106,35 @@ async function sendVendorSms({ to, body, env }) {
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification, sendVendorApprovalRequest, sendVendorSms };
+// Emergency escalation — sent immediately on urgentReviewRequired, before contact-preference collection.
+// Best-effort (never throws). Uses a 5-second timeout to keep Ava's response snappy.
+async function sendEmergencyEscalation({ to, caseNumber, address, description, callerPhone, env }) {
+  if (!to) return;
+  if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) return;
+  const twilio = require('twilio');
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const addrPart = address ? ` at ${address}` : '';
+  const descPart = description ? ` — ${description.slice(0, 120)}` : '';
+  const callbackPart = callerPhone ? ` Caller: ${callerPhone}` : '';
+  const body = `🚨 EMERGENCY — Desert Ridge PMA: Case #${caseNumber}${addrPart}${descPart}.${callbackPart} Immediate attention required.`;
+  const params = { to, body };
+  if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
+    params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+  } else {
+    params.from = env.PMA_SMS_FROM_NUMBER;
+  }
+  const last4 = String(to).slice(-4);
+  try {
+    const msg = await Promise.race([
+      client.messages.create(params),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMS_TIMEOUT')), 5000)
+      ),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_sms_emergency_sent', to_last4: last4, sid: msg.sid, caseNumber }));
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pma_sms_emergency_failed', to_last4: last4, code: err.code || err.message, caseNumber }));
+  }
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms };
