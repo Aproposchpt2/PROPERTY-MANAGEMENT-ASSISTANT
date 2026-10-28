@@ -248,8 +248,8 @@ function setFilter(val, btn) {
 async function openCase(id) {
   _openCaseId = id;
   const d = await apiFetch('/api/manager/cases/' + id);
-  if (!d.success) return;
-  const c = d.case;
+  if (!d.success) { alert('Could not open case: ' + (d.error || d.state || 'unknown')); return; }
+  const c = d.case || d;
   const vendD = await apiFetch('/api/manager/vendors');
   _vendors = (vendD.success && vendD.vendors) ? vendD.vendors : [];
   renderPanel(c);
