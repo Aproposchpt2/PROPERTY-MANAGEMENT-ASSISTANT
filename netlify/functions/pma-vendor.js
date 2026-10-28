@@ -160,14 +160,20 @@ exports.handler = async function handler(event) {
       const data = await rpc('pma_vendor_request_nte_v1', {
         vendor_id: vendorId, case_number: body.case_number,
         amount, reason: body.reason || null });
-      if (data && data.success && data.approvalState === 'PENDING' && data.approvers) {
+      // The RPC returns { approved, requestId, approvers: [{ tenantUserId, email, phone }] }.
+      let notified = 0;
+      const isApproved = !!(data && (data.approved === true || data.approvalState === 'APPROVED'));
+      if (data && data.success && !isApproved && Array.isArray(data.approvers)) {
         for (const approver of data.approvers) {
-          if (!approver.notificationPhone || !approver.requestId) continue;
+          const approverPhone = approver.phone || approver.notificationPhone;
+          const approverId = approver.tenantUserId || approver.userId;
+          const requestId = data.requestId || approver.requestId;
+          if (!approverPhone || !approverId || !requestId) continue;
           const rawToken = crypto.randomBytes(32).toString('hex');
           const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
           const insertResult = await rpc('pma_approval_insert_v1', {
-            request_id: approver.requestId,
-            approver_user_id: approver.userId,
+            request_id: requestId,
+            approver_user_id: approverId,
             amount,
             token_hash: tokenHash,
           });
@@ -175,15 +181,28 @@ exports.handler = async function handler(event) {
           const approveUrl = `${env.PMA_BASE_URL || 'https://pma.stellaruc.com'}/approve?t=${rawToken}`;
           const shortCode = insertResult.shortCode || '';
           await sendVendorApprovalRequest({
-            to: approver.notificationPhone,
+            to: approverPhone,
             approverName: approver.name || 'Manager',
             caseNumber: body.case_number,
             amount,
             approveUrl,
             shortCode,
             env,
-          }).catch(() => {});
+          }).then(() => { notified += 1; }).catch((e) => {
+            console.error(JSON.stringify({ event: 'pma_nte_sms_failed', error: e && e.message }));
+          });
         }
+      }
+      if (data && data.success) {
+        // Plain fields for Avery; never expose approver contact details to the caller.
+        return json(200, {
+          success: true,
+          caseNumber: data.caseNumber || body.case_number,
+          amount: data.amount,
+          approvalState: isApproved ? 'APPROVED' : 'PENDING',
+          approvalChannel: data.approvalChannel || null,
+          managerNotified: notified > 0,
+        });
       }
       return json(200, data);
     }

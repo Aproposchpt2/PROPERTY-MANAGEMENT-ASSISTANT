@@ -222,6 +222,34 @@ test('request_nte auto-approved returns 200 with APPROVED state', async () => {
   clearStubs();
 });
 
+test('request_nte pending (real RPC shape) texts approver and hides contacts', async () => {
+  clearStubs();
+  const inserts = [];
+  stubSupabase(async (name, args) => {
+    if (name === 'pma_vendor_lookup_v1') return makeRpcResult({ success: true, vendorId: 'v1' });
+    if (name === 'pma_vendor_request_nte_v1') return makeRpcResult({ success: true, approved: false, amount: 450,
+      requestId: 'r1', caseNumber: 'PMA-001',
+      approvers: [{ tenantUserId: 'u1', email: 'm@example.com', phone: '+17025550002' }, { tenantUserId: 'u2', email: 'x@example.com', phone: null }] });
+    if (name === 'pma_approval_insert_v1') { inserts.push(args); return makeRpcResult({ success: true, shortCode: 'ABC123' }); }
+    return makeRpcResult({});
+  });
+  stubSms();
+  const savedEnv = Object.assign({}, process.env);
+  Object.assign(process.env, stubEnv);
+  const mod = require('../netlify/functions/pma-vendor');
+  const ev = makeEvent({ body: JSON.stringify({ caller_phone: '+17025550001', action: 'request_nte', case_number: 'PMA-001', amount: 450 }) });
+  const res = await mod.handler(ev);
+  Object.assign(process.env, savedEnv);
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.approvalState, 'PENDING');
+  assert.equal(body.approvers, undefined);
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0].request_id, 'r1');
+  assert.equal(inserts[0].approver_user_id, 'u1');
+  clearStubs();
+});
+
 test('unknown action returns 400', async () => {
   clearStubs();
   stubSupabase(async (name) => {
