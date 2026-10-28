@@ -30,7 +30,7 @@ function makeRpc(env) {
 
 exports.handler = async function handler(event) {
   const env = process.env;
-  if (!['GET', 'POST', 'PATCH'].includes(event.httpMethod)) {
+  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod)) {
     return json(405, { error: 'Method not allowed' });
   }
   const auth = await verifyManager(event, env);
@@ -98,6 +98,32 @@ exports.handler = async function handler(event) {
         trade: body.trade,
         phone: body.phone,
         v_status: body.status || 'active',
+      });
+      return json(200, data);
+    }
+    // POST /api/manager/cases/:id/approve
+    if (action === 'cases' && id && sub === 'approve' && event.httpMethod === 'POST') {
+      const response = (body.response || '').toUpperCase();
+      if (!['APPROVED', 'DECLINED'].includes(response)) return json(400, { error: 'response must be APPROVED or DECLINED' });
+      const data = await rpc('pma_mgr_approve_case_v1', { request_id: id, actor_user_id: authUserId, response });
+      if (data && data.state === 'NOT_FOUND') return json(404, data);
+      return json(200, data);
+    }
+    // GET /api/manager/preauth
+    if (action === 'preauth' && !id && event.httpMethod === 'GET') {
+      const data = await rpc('pma_preauth_rules_list_v1', {});
+      return json(200, data);
+    }
+    // POST /api/manager/preauth
+    if (action === 'preauth' && !id && event.httpMethod === 'POST') {
+      const data = await rpc('pma_preauth_rule_upsert_v1', {
+        actor_user_id: authUserId,
+        rule_id: body.ruleId || null,
+        rule_property_id: body.propertyId || null,
+        category: body.category || null,
+        max_amount: body.maxAmount,
+        allow_emergency: body.allowEmergency || false,
+        active: body.active !== false,
       });
       return json(200, data);
     }

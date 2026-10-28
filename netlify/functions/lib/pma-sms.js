@@ -69,4 +69,41 @@ async function sendStaffNotification({ to, caseNumber, env }) {
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification };
+async function sendVendorApprovalRequest({ to, approverName, caseNumber, amount, approveUrl, shortCode, env }) {
+  if (!env.PMA_VENDOR_FROM) throw Object.assign(new Error('PMA_VENDOR_FROM not configured'), { code: 'SMS_NOT_CONFIGURED' });
+  const twilio = require('twilio');
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const last4 = String(to).slice(-4);
+  const body = `PMA NTE Request: Case #${caseNumber} — vendor quoted $${Number(amount).toFixed(2)}. ` +
+    `Reply YES${shortCode} to approve or NO${shortCode} to decline. Or tap: ${approveUrl}`;
+  try {
+    const msg = await Promise.race([
+      client.messages.create({ to, from: env.PMA_VENDOR_FROM, body }),
+      new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('SMS_TIMEOUT'), { code: 'SMS_TIMEOUT' })), 8000)),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_approval_sms_sent', to_last4: last4, sid: msg.sid }));
+    return { sid: msg.sid };
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pma_approval_sms_failed', to_last4: last4, code: err.code || err.message }));
+    throw err;
+  }
+}
+
+async function sendVendorSms({ to, body, env }) {
+  if (!env.PMA_VENDOR_FROM) return;
+  const twilio = require('twilio');
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const last4 = String(to).slice(-4);
+  try {
+    const msg = await Promise.race([
+      client.messages.create({ to, from: env.PMA_VENDOR_FROM, body }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMS_TIMEOUT')), 8000)),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_vendor_sms_sent', to_last4: last4, sid: msg.sid }));
+    return { sid: msg.sid };
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pma_vendor_sms_failed', to_last4: last4, code: err.code || err.message }));
+  }
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendVendorApprovalRequest, sendVendorSms };

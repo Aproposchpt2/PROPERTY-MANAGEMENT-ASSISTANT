@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NTE Approval</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=DM+Sans:wght@400;600&family=Syncopate:wght@400&display=swap">
+<link rel="stylesheet" href="/pma-site.css">
+<style>
+.approve-wrap{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:clamp(22px,5vw,60px) 16px}
+.approve-card{width:min(100%,480px);border:1px solid var(--line);background:#101010;padding:clamp(28px,5vw,50px);text-align:center}
+.approve-card .eyebrow{font:400 10px/1.8 'Syncopate',sans-serif;letter-spacing:.09em;color:var(--light);margin-bottom:24px}
+.approve-card h1{font:400 clamp(34px,6vw,52px)/1.06 'Cormorant Garamond',serif;margin:0 0 8px}
+.amount{font:500 clamp(44px,9vw,72px)/1 'Cormorant Garamond',serif;color:var(--light);margin:16px 0}
+.case-meta{color:var(--muted);font-size:13px;line-height:1.9;margin-bottom:28px}
+.case-meta strong{color:var(--body)}
+.approve-actions{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.btn-approve{background:var(--gold);color:#050505;border:none;padding:17px 28px;font:600 14px 'DM Sans',sans-serif;cursor:pointer;transition:opacity .2s}
+.btn-approve:hover{opacity:.88}
+.btn-decline{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,.12);padding:15px 28px;font:400 13px 'DM Sans',sans-serif;cursor:pointer;transition:color .2s,border-color .2s}
+.btn-decline:hover{color:var(--body);border-color:rgba(255,255,255,.28)}
+.status-msg{margin-top:28px;font-size:14px;line-height:1.7;color:var(--body);display:none}
+.status-msg.show{display:block}
+.status-msg.done-approved{color:#7fc07f}
+.status-msg.done-declined{color:var(--muted)}
+.status-msg.err{color:#d08080}
+.spinner{display:none;width:28px;height:28px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+.spinner.show{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-state .approve-actions{opacity:.45;pointer-events:none}
+</style>
+</head>
+<body>
+<a href="#main" class="skip">Skip to main content</a>
+<main id="main" class="approve-wrap">
+  <div class="approve-card" id="card">
+    <div class="eyebrow">Desert Ridge · NTE Authorization</div>
+    <div id="loading-view">
+      <div class="spinner show"></div>
+      <p style="color:var(--muted);font-size:14px">Loading request…</p>
+    </div>
+    <div id="detail-view" style="display:none">
+      <h1>Approve Maintenance Cost</h1>
+      <div class="amount" id="amount-display"></div>
+      <div class="case-meta" id="case-meta"></div>
+      <div class="approve-actions" id="actions">
+        <button class="btn-approve" id="btn-approve" onclick="respond('APPROVED')">Approve</button>
+        <button class="btn-decline" id="btn-decline" onclick="respond('DECLINED')">Decline</button>
+      </div>
+      <div class="status-msg" id="status-msg"></div>
+    </div>
+    <div id="error-view" style="display:none">
+      <div class="eyebrow">Request Status</div>
+      <p id="error-msg" style="color:var(--muted);font-size:14px;margin-top:16px"></p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div><span>&copy; 2026 Desert Ridge Property Management &mdash; Powered by Stellar UC</span></div>
+</footer>
+<script>
+(function () {
+  'use strict';
+  var token = new URLSearchParams(location.search).get('t') || '';
+  var responded = false;
+
+  function showError(msg) {
+    document.getElementById('loading-view').style.display = 'none';
+    document.getElementById('detail-view').style.display = 'none';
+    document.getElementById('error-view').style.display = 'block';
+    document.getElementById('error-msg').textContent = msg;
+  }
+
+  function load() {
+    if (!token) { showError('No approval token found in this link.'); return; }
+    fetch('/api/approve?t=' + encodeURIComponent(token))
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
+      .then(function (res) {
+        document.getElementById('loading-view').style.display = 'none';
+        if (!res.ok || !res.data.success) {
+          var st = (res.data && res.data.state) || 'NOT_FOUND';
+          showError(st === 'EXPIRED'
+            ? 'This approval link has expired. Please contact your property manager.'
+            : 'This request could not be found or has already been handled.');
+          return;
+        }
+        var d = res.data;
+        document.getElementById('amount-display').textContent = '$' + Number(d.amount).toFixed(2);
+        var meta = '';
+        if (d.caseNumber) meta += '<strong>Case:</strong> ' + d.caseNumber + '<br>';
+        if (d.summary) meta += '<strong>Issue:</strong> ' + escHtml(d.summary) + '<br>';
+        if (d.property) meta += '<strong>Property:</strong> ' + escHtml(d.property) + (d.unit ? ' &mdash; Unit ' + escHtml(d.unit) : '') + '<br>';
+        document.getElementById('case-meta').innerHTML = meta;
+        document.getElementById('detail-view').style.display = 'block';
+      })
+      .catch(function () { showError('Unable to load request. Please try again.'); });
+  }
+
+  function respond(response) {
+    if (responded) return;
+    responded = true;
+    var actions = document.getElementById('actions');
+    var msg = document.getElementById('status-msg');
+    var spinner = document.querySelector('.spinner');
+    actions.style.opacity = '0.4';
+    actions.style.pointerEvents = 'none';
+    if (spinner) { spinner.style.display = 'block'; }
+
+    fetch('/api/approve?t=' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ response: response }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
+      .then(function (res) {
+        if (spinner) spinner.style.display = 'none';
+        if (!res.ok || !res.data.success) {
+          var st = (res.data && res.data.state) || '';
+          msg.textContent = st === 'EXPIRED'
+            ? 'This request has expired.'
+            : 'Could not process your response. It may have already been handled.';
+          msg.className = 'status-msg show err';
+          return;
+        }
+        var d = res.data;
+        var verb = d.response === 'APPROVED' ? 'approved' : 'declined';
+        msg.textContent = 'You ' + verb + ' the $' + Number(d.amount).toFixed(2) + ' request for case #' + d.caseNumber + '. Thank you.';
+        msg.className = 'status-msg show ' + (d.response === 'APPROVED' ? 'done-approved' : 'done-declined');
+        document.getElementById('btn-approve').style.display = 'none';
+        document.getElementById('btn-decline').style.display = 'none';
+      })
+      .catch(function () {
+        if (spinner) spinner.style.display = 'none';
+        responded = false;
+        actions.style.opacity = '';
+        actions.style.pointerEvents = '';
+        msg.textContent = 'Network error. Please try again.';
+        msg.className = 'status-msg show err';
+      });
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  window.respond = respond;
+  load();
+}());
+</script>
+</body>
+</html>

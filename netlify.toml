@@ -60,3 +60,21 @@
   to = "/.netlify/functions/pma-portal-api"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/tools/pma-vendor"
+  to = "/.netlify/functions/pma-vendor"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/sms/vendor-inbound"
+  to = "/.netlify/functions/pma-vendor-inbound"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/approve"
+  to = "/.netlify/functions/pma-approve-api"
+  status = 200
+  force = true
