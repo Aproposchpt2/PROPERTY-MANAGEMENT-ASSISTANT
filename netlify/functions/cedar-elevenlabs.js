@@ -112,6 +112,22 @@ const E164_RE = /^\+[1-9][0-9]{7,14}$/;
 // Printable ASCII pattern required for call_sid.
 const CALL_SID_RE = /^[!-~]{1,200}$/;
 
+// Pre-format the vendor window in the property's time zone so Ava reads it
+// verbatim instead of converting UTC timestamps herself.
+function withSpokenWindow(r) {
+  if (!r || !r.success || !r.scheduledStart) return r;
+  const tz = r.propertyTimezone || 'America/Los_Angeles';
+  const lang = r.language === 'es' ? 'es-US' : 'en-US';
+  try {
+    const start = new Date(r.scheduledStart);
+    const day = new Intl.DateTimeFormat(lang, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(start);
+    const time = (d) => new Intl.DateTimeFormat(lang, { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
+    const out = { ...r, scheduledDayLocal: day, scheduledStartLocal: time(start) };
+    if (r.scheduledEnd) out.scheduledEndLocal = time(new Date(r.scheduledEnd));
+    return out;
+  } catch { return r; }
+}
+
 exports.handler = async function handler(event) {
   const env = process.env;
   if (event.httpMethod !== 'POST') {
@@ -291,7 +307,7 @@ exports.handler = async function handler(event) {
       const callerNum = caller_number_raw && E164_RE.test(caller_number_raw) ? caller_number_raw : null;
       const caseNum = parameters.case_number || null;
       const result = await store.lookupCase({ caller_number: callerNum, case_number: caseNum });
-      return respond(result || { success: false, state: 'NOT_FOUND' });
+      return respond(result ? withSpokenWindow(result) : { success: false, state: 'NOT_FOUND' });
     }
     if (tool_name === 'close_session') {
       const result = await store.close({ session_id, call_sid });
