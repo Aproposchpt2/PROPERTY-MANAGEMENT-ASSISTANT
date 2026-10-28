@@ -41,6 +41,40 @@ function makeRpc(env) {
   };
 }
 
+const PROPERTY_TZ = 'America/Los_Angeles';
+
+// Avery sends times like 2026-11-05T09:00:00 with no zone. Treat those as the
+// property's local time; keep any value that already carries Z or an offset.
+function localToIso(value, tz = PROPERTY_TZ) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const v = value.trim();
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(v)) { const d = new Date(v); return isNaN(d) ? null : d.toISOString(); }
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const asUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  const offsetAt = (ms) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      .formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second) - ms;
+  };
+  let ms = asUtc - offsetAt(asUtc);
+  ms = asUtc - offsetAt(ms);
+  return new Date(ms).toISOString();
+}
+
+// Add spoken local times so Avery never converts UTC herself.
+function speakTimes(order, tz = PROPERTY_TZ) {
+  const day = (iso) => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(iso));
+  const time = (iso) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  const out = { ...order };
+  if (order.scheduledStart) { out.scheduledDayLocal = day(order.scheduledStart); out.scheduledStartLocal = time(order.scheduledStart); }
+  if (order.scheduledEnd) out.scheduledEndLocal = time(order.scheduledEnd);
+  if (order.proposedStart) { out.proposedDayLocal = day(order.proposedStart); out.proposedStartLocal = time(order.proposedStart); }
+  if (order.proposedEnd) out.proposedEndLocal = time(order.proposedEnd);
+  return out;
+}
+
 exports.handler = async function handler(event) {
   const env = process.env;
   if (event.httpMethod !== 'POST') return json(405, { error: 'POST only' });
@@ -72,6 +106,7 @@ exports.handler = async function handler(event) {
     if (action === 'list_work_orders') {
       const data = await rpc('pma_vendor_work_orders_v1', {
         vendor_id: vendorId, case_number: body.case_number || null });
+      if (data && Array.isArray(data.workOrders)) data.workOrders = data.workOrders.map((o) => speakTimes(o));
       return json(200, data);
     }
 
@@ -92,9 +127,13 @@ exports.handler = async function handler(event) {
       if (!body.case_number || !body.proposed_start || !body.proposed_end) {
         return json(400, { error: 'case_number, proposed_start, proposed_end required' });
       }
+      const proposedStart = localToIso(body.proposed_start);
+      const proposedEnd = localToIso(body.proposed_end);
+      if (!proposedStart || !proposedEnd) return json(400, { error: 'proposed_start and proposed_end must be dates like 2026-11-05T09:00:00' });
+      if (new Date(proposedEnd) <= new Date(proposedStart)) return json(400, { error: 'proposed_end must be after proposed_start' });
       const data = await rpc('pma_vendor_propose_window_v1', {
         vendor_id: vendorId, case_number: body.case_number,
-        proposed_start: body.proposed_start, proposed_end: body.proposed_end });
+        proposed_start: proposedStart, proposed_end: proposedEnd });
       if (data && data.success && data.windowState === 'PROPOSED' && data.tenantPhone) {
         await sendVendorSms({
           to: data.tenantPhone,
