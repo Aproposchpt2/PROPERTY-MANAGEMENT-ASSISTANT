@@ -74,6 +74,10 @@ select.field-input{appearance:none;cursor:pointer}
       <p>Enter your email to receive a secure sign-in link.</p>
       <input class="field-input" id="login-email" type="email" placeholder="you@example.com" style="margin-bottom:12px">
       <button class="btn-primary" style="width:100%" onclick="sendMagicLink()">Send Sign-In Link</button>
+      <div id="code-step" style="display:none;margin-top:16px">
+        <input class="field-input" id="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Enter the code from your email" style="margin-bottom:12px">
+        <button class="btn-primary" style="width:100%" onclick="verifyCode()">Sign In</button>
+      </div>
       <p class="login-msg" id="login-msg"></p>
     </div>
   </div>
@@ -172,7 +176,22 @@ async function sendMagicLink() {
     email,
     options: { shouldCreateUser: false, emailRedirectTo: location.origin + '/manager' }
   });
-  msg.textContent = error ? 'Error: ' + error.message : 'Check your email for a sign-in link.';
+  if (error) { msg.textContent = 'Error: ' + error.message; return; }
+  msg.textContent = 'Check your email. Enter the code below, or open the link if one was sent.';
+  document.getElementById('code-step').style.display = '';
+  document.getElementById('login-code').focus();
+}
+
+async function verifyCode() {
+  const email = document.getElementById('login-email').value.trim();
+  const token = document.getElementById('login-code').value.replace(/\s/g, '');
+  const msg = document.getElementById('login-msg');
+  if (!email || !/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter your email and the code from the email.'; return; }
+  msg.textContent = 'Verifying…';
+  const { data, error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+  if (error) { msg.textContent = 'Error: ' + error.message; return; }
+  _session = data.session;
+  showDashboard();
 }
 
 async function signOut() {
