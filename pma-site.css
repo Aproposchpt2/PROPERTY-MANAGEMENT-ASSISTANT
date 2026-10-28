@@ -23,3 +23,8 @@
 .hero-care-center{color:var(--light);font:400 clamp(26px,3.2vw,47px)/1.13 'Cormorant Garamond',Georgia,serif;letter-spacing:.02em;margin:-7px 0 19px;max-width:760px}
 .hero-service-message{max-width:760px;border-left:1px solid var(--gold);padding-left:20px}
 @media(max-width:750px){.hero-care-center{font-size:clamp(25px,6.2vw,39px)}.hero-service-message{padding-left:15px}}
+
+/* Consultation invitation directly above existing intake action. */
+.intake-message{margin:30px auto 6px;max-width:980px}
+.intake-message h3{font:400 clamp(33px,4.5vw,58px)/1.12 'Cormorant Garamond',Georgia,serif;color:var(--ivory);margin:0}
+.intake-message h3 span{color:var(--light)}
