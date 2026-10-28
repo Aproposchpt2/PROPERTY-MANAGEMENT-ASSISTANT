@@ -121,12 +121,15 @@ function withSpokenWindow(r) {
   try {
     const start = new Date(r.scheduledStart);
     const day = new Intl.DateTimeFormat(lang, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(start);
-    const time = (d) => new Intl.DateTimeFormat(lang, { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d);
+    const time = (d) => spokenTime(new Intl.DateTimeFormat(lang, { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d));
     const out = { ...r, scheduledDayLocal: day, scheduledStartLocal: time(start) };
     if (r.scheduledEnd) out.scheduledEndLocal = time(new Date(r.scheduledEnd));
     return out;
   } catch { return r; }
 }
+
+// "9:00 AM" -> "9 AM", "3:30 PM" stays; avoids TTS reading "nine zero zero".
+function spokenTime(t) { return String(t).replace(/:00(?=\s?[AaPp]\.?[Mm])/, '').replace(/:00(?=\s?[ap]\.\s?m\.)/, ''); }
 
 exports.handler = async function handler(event) {
   const env = process.env;

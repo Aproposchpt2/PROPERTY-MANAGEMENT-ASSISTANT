@@ -66,7 +66,7 @@ function localToIso(value, tz = PROPERTY_TZ) {
 // Add spoken local times so Avery never converts UTC herself.
 function speakTimes(order, tz = PROPERTY_TZ) {
   const day = (iso) => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(iso));
-  const time = (iso) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  const time = (iso) => spokenTime(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(iso)));
   const out = { ...order };
   if (order.scheduledStart) { out.scheduledDayLocal = day(order.scheduledStart); out.scheduledStartLocal = time(order.scheduledStart); }
   if (order.scheduledEnd) out.scheduledEndLocal = time(order.scheduledEnd);
@@ -74,6 +74,9 @@ function speakTimes(order, tz = PROPERTY_TZ) {
   if (order.proposedEnd) out.proposedEndLocal = time(order.proposedEnd);
   return out;
 }
+
+// "9:00 AM" -> "9 AM", "3:30 PM" stays; avoids TTS reading "nine zero zero".
+function spokenTime(t) { return String(t).replace(/:00(?=\s?[AaPp]\.?[Mm])/, '').replace(/:00(?=\s?[ap]\.\s?m\.)/, ''); }
 
 exports.handler = async function handler(event) {
   const env = process.env;
