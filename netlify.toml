@@ -1,4 +1,5 @@
 [build]
+  command = "node scripts/seo-build.mjs"
   publish = "."
   functions = "netlify/functions"
 
