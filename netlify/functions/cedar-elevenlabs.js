@@ -212,8 +212,9 @@ exports.handler = async function handler(event) {
         if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
       }
       // ── Emergency escalation ─────────────────────────────────────────────────
-      // Fire-and-forget: alert on-call staff immediately when urgentReviewRequired.
-      // Does NOT await — Ava must respond to the caller without blocking.
+      // Awaited: Lambda freezes background promises when the handler returns,
+      // so fire-and-forget never reached Twilio. Awaiting adds ~1s to Ava's
+      // response — acceptable for an emergency.
       if (result && result.urgentReviewRequired && env.PMA_SMS_ENABLED === 'true') {
         const { sendEmergencyEscalation } = require('./lib/pma-sms');
         const escalationArgs = {
@@ -223,15 +224,14 @@ exports.handler = async function handler(event) {
           callerPhone: caller_number_raw || null,
           env,
         };
-        Promise.allSettled([
+        const smsResults = await Promise.allSettled([
           sendEmergencyEscalation({ to: env.PMA_SMS_MAINTENANCE_NUMBER, ...escalationArgs }),
           sendEmergencyEscalation({ to: env.PMA_SMS_MANAGER_NUMBER, ...escalationArgs }),
-        ]).then(results => {
-          results.forEach((r, i) => {
-            if (r.status === 'rejected') {
-              console.error(JSON.stringify({ event: 'cedar_emergency_escalation_failed', index: i, error: r.reason?.message }));
-            }
-          });
+        ]);
+        smsResults.forEach((r, i) => {
+          if (r.status === 'rejected') {
+            console.error(JSON.stringify({ event: 'cedar_emergency_escalation_failed', index: i, error: r.reason?.message }));
+          }
         });
       }
       return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
