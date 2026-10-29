@@ -1,10 +1,11 @@
 'use strict';
 
+const twilio = require('twilio');
+
 async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLink = null, env }) {
   if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) {
     throw Object.assign(new Error('SMS_NOT_CONFIGURED'), { code: 'SMS_NOT_CONFIGURED' });
   }
-  const twilio = require('twilio');
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   const params = {
     to,
@@ -44,7 +45,6 @@ async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLin
 async function sendStaffNotification({ to, caseNumber, env }) {
   if (!to) return;
   if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) return;
-  const twilio = require('twilio');
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   const params = {
     to,
@@ -71,7 +71,6 @@ async function sendStaffNotification({ to, caseNumber, env }) {
 
 async function sendVendorApprovalRequest({ to, approverName, caseNumber, amount, approveUrl, shortCode, env }) {
   if (!env.PMA_VENDOR_FROM) throw Object.assign(new Error('PMA_VENDOR_FROM not configured'), { code: 'SMS_NOT_CONFIGURED' });
-  const twilio = require('twilio');
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   const last4 = String(to).slice(-4);
   const body = `PMA NTE Request: Case #${caseNumber} — vendor quoted $${Number(amount).toFixed(2)}. ` +
@@ -91,7 +90,6 @@ async function sendVendorApprovalRequest({ to, approverName, caseNumber, amount,
 
 async function sendVendorSms({ to, body, env }) {
   if (!env.PMA_VENDOR_FROM) return;
-  const twilio = require('twilio');
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   const last4 = String(to).slice(-4);
   try {
@@ -107,11 +105,10 @@ async function sendVendorSms({ to, body, env }) {
 }
 
 // Emergency escalation — sent immediately on urgentReviewRequired, before contact-preference collection.
-// Best-effort (never throws). Uses a 5-second timeout to keep Ava's response snappy.
+// Best-effort (never throws). 12s timeout — twilio module is loaded at module level so cold-start overhead is gone.
 async function sendEmergencyEscalation({ to, caseNumber, address, description, callerPhone, env }) {
   if (!to) return;
   if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) return;
-  const twilio = require('twilio');
   const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
   const addrPart = address ? ` at ${address}` : '';
   const descPart = description ? ` — ${description.slice(0, 120)}` : '';
@@ -128,7 +125,7 @@ async function sendEmergencyEscalation({ to, caseNumber, address, description, c
     const msg = await Promise.race([
       client.messages.create(params),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('SMS_TIMEOUT')), 5000)
+        setTimeout(() => reject(new Error('SMS_TIMEOUT')), 12000)
       ),
     ]);
     console.log(JSON.stringify({ event: 'pma_sms_emergency_sent', to_last4: last4, sid: msg.sid, caseNumber }));
