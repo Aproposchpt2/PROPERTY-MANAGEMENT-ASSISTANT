@@ -63,7 +63,7 @@ exports.handler = async (event) => {
     const meta = data?.metadata || {};
     const analysis = data?.analysis || {};
 
-    const call_duration_secs = Number(meta.call_duration_secs || 0);
+    const call_duration_secs = Math.round(Number(meta.call_duration_secs || 0));
     const started_at = meta.start_time_unix_secs
       ? new Date(meta.start_time_unix_secs * 1000).toISOString()
       : null;
@@ -98,7 +98,9 @@ exports.handler = async (event) => {
     console.log(`[cedar-postcall] logged conversation_id=${conversation_id} duration=${call_duration_secs}s twilio_cost=$${twilio_cost_usd}`);
     return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {
+    // Return 200 so ElevenLabs does not auto-disable the webhook on DB errors.
+    // The actual failure is visible in Netlify function logs via the console.error below.
     console.error('[cedar-postcall] store error:', err.message);
-    return { statusCode: 500, body: JSON.stringify({ error: 'LOG_FAILED' }) };
+    return { statusCode: 200, body: JSON.stringify({ ok: false, error: 'LOG_FAILED', detail: err.message }) };
   }
 };
