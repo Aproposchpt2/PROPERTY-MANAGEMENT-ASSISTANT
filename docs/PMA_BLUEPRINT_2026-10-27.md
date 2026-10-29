@@ -47,11 +47,14 @@ The system is self-contained on **Stellar UC** infrastructure and observable fro
 | Table | Purpose |
 |---|---|
 | `pma_voice_sessions` | One row per call — tenant, property, call_sid |
-| `pma_cases` | Maintenance incident records |
-| `pma_contact_preferences` | SMS/email opt-ins |
-| `pma_sms_log` | Outbound SMS delivery records |
-| `pma_email_log` | Outbound email delivery records |
+| `pma_maintenance_requests` | Incident/case records — case_number, intake_details (JSONB) |
 | `pma_call_log` | Post-call metrics (duration, credits, Twilio cost) |
+| `pma_staff_property_access` | Manager-to-property access control (OWNER/ADMIN = full access) |
+| `pma_portal_tokens` | Read-only tenant status links — SHA-256 token hash, never raw |
+| `pma_preauth_rules` | Vendor pre-authorization rules per property |
+| `pma_approval_requests` | Vendor work approval requests (NTE, scheduling, sign-off) |
+
+**Contact preferences and SMS/email state** are stored as JSONB inside `pma_maintenance_requests.intake_details` — there is no separate `pma_contact_preferences`, `pma_sms_log`, or `pma_email_log` table.
 
 All RPCs are `SECURITY DEFINER`, granted to `service_role` only, revoked from `public/anon/authenticated`.
 
@@ -61,7 +64,7 @@ All RPCs are `SECURITY DEFINER`, granted to `service_role` only, revoked from `p
 
 | Tool | ElevenLabs Name | What It Does |
 |---|---|---|
-| File incident | `create_incident` | Creates a `pma_cases` record with address, unit, description |
+| File incident | `create_incident` | Creates a `pma_maintenance_requests` record with address, unit, description |
 | Case lookup | `get_case_status` | Looks up by caller ID or case number; handles MULTIPLE_CASES |
 | Contact preference | `record_contact_preference` | Saves SMS/email opt-in; triggers confirmation send |
 | End call | `close_session` | Closes the voice session cleanly |
