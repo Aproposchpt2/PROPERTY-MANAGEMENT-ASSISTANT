@@ -20,6 +20,12 @@
     timeout = 15
 
 [[redirects]]
+  from = "/api/intake"
+  to = "/.netlify/functions/pma-intake"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/intake/carol-sip-openai"
   to = "/.netlify/functions/carol-sip-openai"
   status = 200

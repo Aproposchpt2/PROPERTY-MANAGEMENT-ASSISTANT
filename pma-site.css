@@ -118,3 +118,24 @@
 .rv-panel p{color:var(--body);max-width:760px;margin:0;line-height:1.85}
 @media(max-width:470px){.rv-tablist button{flex-direction:column;gap:2px;padding:12px 4px;font-size:13px}}
 @media(prefers-reduced-motion:reduce){.rv-panel{animation:none}}
+/* Consultation intake (mirrors stellaruc.com/intake) */
+.intake-page{min-height:70vh;display:grid;place-items:center;padding:70px 20px;background:radial-gradient(circle at 80% 5%,rgba(200,168,75,.12),transparent 34%),#050505}
+.intake-card{width:100%;max-width:480px;border:1px solid rgba(200,168,75,.45);background:#0d0d0d;padding:36px}
+.intake-card h1{font:400 clamp(30px,4vw,40px)/1.15 'Cormorant Garamond',Georgia,serif;margin:12px 0 8px;color:var(--ivory)}
+.intake-sub{color:var(--body);margin:0 0 24px}
+#intake-form{display:grid;gap:14px}
+#intake-form label{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:-6px}
+#intake-form input:not([type=checkbox]){border:1px solid var(--line);background:#141414;color:var(--ivory);padding:13px 14px;font:inherit;font-size:16px}
+#intake-form input:focus{outline:none;border-color:var(--gold)}
+#intake-form label.intake-consent{display:flex;gap:10px;align-items:flex-start;margin:4px 0 0;color:var(--body);font-size:13px;font-weight:400;letter-spacing:0;text-transform:none;line-height:1.55}
+.intake-consent input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--gold)}
+.intake-agree{color:var(--muted);font-size:12px;line-height:1.5;margin:0}
+.intake-consent a,.intake-agree a{border-bottom:1px solid var(--line)}
+.intake-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+#intake-submit{margin-top:8px;border:0;background:var(--gold);color:#050505;padding:15px 18px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;min-height:48px}
+#intake-submit:disabled{opacity:.6;cursor:default}
+.intake-error{color:#f2a3a3;font-size:14px}
+.intake-success{text-align:center}
+.intake-success p{color:var(--body);line-height:1.7}
+.intake-book{margin-top:12px;justify-content:center;text-align:center}
+.intake-note{font-size:13px;color:var(--muted)!important}
