@@ -28,3 +28,22 @@
 .intake-message{margin:30px auto 6px;max-width:980px}
 .intake-message h3{font:400 clamp(33px,4.5vw,58px)/1.12 'Cormorant Garamond',Georgia,serif;color:var(--ivory);margin:0}
 .intake-message h3 span{color:var(--light)}
+
+/* Condensed site: education cards, solution list, features page. Uses existing tokens and type. */
+.learn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:37px}
+.learn-grid article{border:1px solid var(--line);background:#111;padding:26px;transition:border-color .23s,transform .23s}
+.learn-grid article:hover{border-color:var(--gold);transform:translateY(-4px)}
+.learn-grid .number{font:500 27px 'Cormorant Garamond',serif;color:var(--light)}
+.learn-grid h3{font:500 30px/1.08 'Cormorant Garamond',serif;margin:14px 0 12px}
+.learn-grid p{color:var(--body);margin:0;font-size:15px}
+.learn-grid article small{display:inline-block;margin-top:16px;font:400 9px 'Syncopate',sans-serif;letter-spacing:.07em;color:var(--gold)}
+.solution-list{list-style:none;padding:0;margin:38px 0 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.solution-list li{border-top:1px solid var(--gold);background:#121212;padding:24px}
+.solution-list b{display:block;font:500 32px 'Cormorant Garamond',serif;color:var(--light)}
+.solution-list span{color:var(--body);font-size:15px}
+.page-head{padding-top:110px}.page-head .section-top{margin-bottom:48px}
+.feature-group+.feature-group{margin-top:60px}
+.feature-group>.eyebrow{display:block;border-bottom:1px solid var(--line);padding-bottom:12px}
+@media(max-width:1050px){.learn-grid{grid-template-columns:1fr 1fr}.solution-list{grid-template-columns:1fr 1fr}}
+@media(max-width:750px){.learn-grid,.solution-list{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.learn-grid article:hover{transform:none}}
