@@ -35,7 +35,7 @@
  }
  function drawJourney(key){
  const d=journeys[key];if(!d)return;setText('journey-title',d.title);setText('journey-description',d.description);
- const host=byId('journey-steps');host.replaceChildren();
+ const host=byId('journey-steps');if(!host)return;host.replaceChildren();
  d.steps.forEach((s,i)=>{const row=document.createElement('div');row.className='journey-step';row.style.animationDelay=(i*100)+'ms';const n=document.createElement('b');n.textContent='0'+(i+1);const t=document.createElement('span');t.textContent=s;const a=document.createElement('span');a.textContent='↗';row.append(n,t,a);host.append(row);});
  document.querySelectorAll('[data-journey]').forEach(b=>b.classList.toggle('active',b.dataset.journey===key));
  }
