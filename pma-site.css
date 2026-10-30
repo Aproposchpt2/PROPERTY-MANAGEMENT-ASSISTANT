@@ -106,3 +106,15 @@
 .rv-acc summary{font-size:clamp(23px,2.4vw,31px)}
 .rv-acc details>div{padding:0 10px 22px;max-width:900px}
 .rv-acc details>div p{color:var(--body);margin:0 0 14px;padding:0;line-height:1.85}
+/* Solution: step tabs */
+.rv-tabs{margin:36px 0 28px}
+.rv-tablist{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.rv-tablist button{display:flex;align-items:center;justify-content:center;gap:10px;background:#101010;border:1px solid var(--line);color:var(--body);padding:16px 8px;font-size:14px;transition:border-color .2s,background .2s}
+.rv-tablist button b{font:400 20px 'Cormorant Garamond',Georgia,serif;color:var(--gold)}
+.rv-tablist button:hover{border-color:var(--gold)}
+.rv-tablist button[aria-selected=true]{background:#29210f;border-color:var(--gold);color:var(--light)}
+.rv-panel{margin-top:10px;border:1px solid rgba(200,168,75,.55);background:radial-gradient(circle at 100% 0,rgba(200,168,75,.1),transparent 60%),#111;padding:clamp(24px,4vw,44px);animation:rise .35s both}
+.rv-panel h3{font:400 clamp(32px,3.6vw,48px)/1.05 'Cormorant Garamond',Georgia,serif;margin:14px 0 12px;color:var(--ivory)}
+.rv-panel p{color:var(--body);max-width:760px;margin:0;line-height:1.85}
+@media(max-width:470px){.rv-tablist button{flex-direction:column;gap:2px;padding:12px 4px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){.rv-panel{animation:none}}

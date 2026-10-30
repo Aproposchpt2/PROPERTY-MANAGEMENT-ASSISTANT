@@ -51,6 +51,9 @@
  const d=benefits[b.dataset.benefit];if(!d)return;setText('benefit-title',d[0]);setText('benefit-description',d[1]);
  document.querySelectorAll('[data-benefit]').forEach(x=>x.classList.toggle('active',x===b));
  }));
+ const stepTabs=[...document.querySelectorAll('[data-step]')];
+ const showStep=t=>{stepTabs.forEach(x=>{const on=x===t;x.setAttribute('aria-selected',String(on));x.tabIndex=on?0:-1;const pn=byId(x.getAttribute('aria-controls'));if(pn)pn.hidden=!on;});};
+ stepTabs.forEach((t,i)=>{t.addEventListener('click',()=>showStep(t));t.addEventListener('keydown',e=>{const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;e.preventDefault();const n=stepTabs[(i+d+stepTabs.length)%stepTabs.length];showStep(n);n.focus();});});
  const menu=document.querySelector('.menu-toggle'),nav=byId('main-nav');
  menu?.addEventListener('click',()=>{const expanded=menu.getAttribute('aria-expanded')==='true';menu.setAttribute('aria-expanded',String(!expanded));nav.classList.toggle('open',!expanded);});
  nav?.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{menu?.setAttribute('aria-expanded','false');nav.classList.remove('open');}));
