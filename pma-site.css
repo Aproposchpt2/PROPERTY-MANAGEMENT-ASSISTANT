@@ -139,3 +139,8 @@
 .intake-success p{color:var(--body);line-height:1.7}
 .intake-book{margin-top:12px;justify-content:center;text-align:center}
 .intake-note{font-size:13px;color:var(--muted)!important}
+
+/* Approved master STELLAR brand extension */
+.hero-new-tagline{font:400 clamp(27px,3vw,43px)/1.1 'Cormorant Garamond',Georgia,serif;color:#F7F4EC;margin:18px 0 10px}
+.hero-new-promise{font-size:16px;line-height:1.7;color:#D3CEC1;max-width:660px;margin:0 0 10px}
+.hero-new-values{font-size:11px;letter-spacing:.11em;color:#E4C878;margin:0 0 24px}
