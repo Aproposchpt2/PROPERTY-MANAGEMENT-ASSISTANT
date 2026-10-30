@@ -57,3 +57,7 @@
 .legal ul{padding-left:22px}.legal li{margin-bottom:6px}
 .legal strong{color:var(--ivory)}
 .legal a{border-bottom:1px solid var(--line)}
+.section.tight{padding-top:72px;padding-bottom:72px}
+.section.tight h2{font-size:clamp(40px,4.6vw,64px)}
+.section.tight .learn-grid,.section.tight .experience-layout{margin-top:28px}
+@media(max-width:750px){.section.tight{padding-top:56px;padding-bottom:56px}}
