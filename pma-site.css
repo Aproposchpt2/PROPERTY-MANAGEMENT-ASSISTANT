@@ -96,3 +96,13 @@
 .rv-consult h2{font:400 clamp(40px,5vw,70px)/1.05 'Cormorant Garamond',Georgia,serif}
 @media(max-width:1050px){.rv-roles{grid-template-columns:1fr 1fr}.rv-roles div:nth-child(3){border-left:0;padding-left:0}.rv-flow{grid-template-columns:1fr 1fr;row-gap:30px}.rv-flow:before{display:none}}
 @media(max-width:750px){.rv-pillars{grid-template-columns:1fr 1fr}.rv-pillars div:nth-child(2){border-right:0}.rv-pillars div:nth-child(-n+2){border-bottom:1px solid var(--line)}.rv-split{grid-template-columns:1fr}.rv-lead{position:static}.rv-roles,.rv-know,.rv-flow{grid-template-columns:1fr}.rv-roles div,.rv-roles div+div{border-left:0;padding-left:0;margin-right:0;border-bottom:1px solid var(--line);padding-bottom:20px}.rv-shifts li{grid-template-columns:44px 1fr}}
+/* Hero without the scenario console; Why message; statement; Who Benefits accordion */
+.hero:not(:has(.hero-console)){grid-template-columns:1fr;min-height:0}
+.rv-narrow{max-width:900px}
+.rv-narrow p,.rv-intro{color:var(--body);line-height:1.85;margin-top:22px;max-width:860px;font-size:17px}
+.rv-statement{text-align:center;padding-top:clamp(56px,7vw,90px);padding-bottom:clamp(56px,7vw,90px)}
+.rv-statement h2{margin:0 auto}
+.rv-acc{margin-top:34px}
+.rv-acc summary{font-size:clamp(23px,2.4vw,31px)}
+.rv-acc details>div{padding:0 10px 22px;max-width:900px}
+.rv-acc details>div p{color:var(--body);margin:0 0 14px;padding:0;line-height:1.85}

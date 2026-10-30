@@ -29,7 +29,7 @@
  function drawScenario(key){
  const d=scenarioData[key]; if(!d)return;
  setText('scenario-type',d.type);setText('scenario-title',d.title);setText('scenario-text',d.text);
- const list=byId('route-list');list.replaceChildren();
+ const list=byId('route-list');if(!list)return;list.replaceChildren();
  d.steps.forEach((s,i)=>{const row=document.createElement('div');row.className='route';row.style.animationDelay=(i*90)+'ms';const no=document.createElement('b');no.textContent='0'+(i+1);const t=document.createElement('span');t.textContent=s;const arrow=document.createElement('span');arrow.textContent='↗';row.append(no,t,arrow);list.append(row);});
  document.querySelectorAll('[data-scenario]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.scenario===key)));
  }
