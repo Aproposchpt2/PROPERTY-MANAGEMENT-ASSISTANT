@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /.netlify/
+Disallow: /admin/
 Disallow: /command-center/
 
 Sitemap: https://pma.stellaruc.com/sitemap.xml

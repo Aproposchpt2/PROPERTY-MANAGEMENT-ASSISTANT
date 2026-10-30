@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulation Testing | Stellar Intelligent Technologies</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&family=Syncopate&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/admin/ops-admin.css">
+</head>
+<body class="ops-app">
+<div class="ribbon"><span>STELLAR INTELLIGENT TECHNOLOGIES</span><span id="ribbon-site">SIMULATION TESTING · ADMIN</span></div>
+
+<div id="login-screen" style="display:none">
+  <div class="login-wrap"><div class="login-card">
+    <h1>Testing Admin</h1>
+    <p>Enter your email to receive a sign-in code.</p>
+    <input class="field-input" id="login-email" type="email" autocomplete="email" placeholder="you@example.com" style="margin-bottom:12px">
+    <button class="btn-primary" style="width:100%" id="send-code">Send Sign-In Code</button>
+    <div id="code-step" style="display:none;margin-top:16px">
+      <input class="field-input" id="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Code from your email" style="margin-bottom:12px">
+      <button class="btn-primary" style="width:100%" id="verify-code">Sign In</button>
+    </div>
+    <p class="login-msg" id="login-msg" role="status"></p>
+  </div></div>
+</div>
+
+<div id="app" class="ops-shell" style="display:none">
+  <aside class="ops-left" aria-label="Filters">
+    <div class="ops-left-top">
+      <h1 class="ops-title">Simulation Testing</h1>
+      <div class="filter-group"><span class="field-label">Product</span>
+        <div class="chips" data-filter="product">
+          <button class="chip active" data-v="">All</button><button class="chip" data-v="support">Support</button><button class="chip" data-v="sales">Sales</button><button class="chip" data-v="pma">PMA</button>
+        </div></div>
+      <div class="filter-group"><span class="field-label">Layer</span>
+        <div class="chips" data-filter="layer">
+          <button class="chip active" data-v="">All</button><button class="chip" data-v="agent">Agent</button><button class="chip" data-v="backend">Backend</button>
+        </div></div>
+      <div class="filter-group"><span class="field-label">Status</span>
+        <div class="chips" data-filter="status">
+          <button class="chip active" data-v="">All</button><button class="chip" data-v="failing">Failing</button><button class="chip" data-v="passing">Passing</button><button class="chip" data-v="never">Never run</button>
+        </div></div>
+      <div class="filter-group health-wrap"><span class="field-label">Health</span>
+        <div id="health"></div>
+        <button class="btn-primary run-all" id="run-all" disabled>Run all for this product</button>
+        <p class="run-all-msg" id="run-all-msg" role="status"></p>
+      </div>
+    </div>
+    <div class="ops-left-foot">
+      <span id="user-email"></span>
+      <a class="btn-sm" href="/">Back to site</a>
+      <button class="btn-sm" id="sign-out">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="ops-main">
+    <div class="ops-main-head">
+      <input class="field-input search" id="search" type="search" placeholder="Search scripts" aria-label="Search scripts">
+      <span class="count" id="count"></span>
+    </div>
+    <div id="banner" class="banner" role="alert" style="display:none"></div>
+    <div class="table-wrap">
+      <table class="ops-table">
+        <thead><tr><th class="c-dot"><span class="sr">Status</span></th><th>Script</th><th class="c-prod">Product</th><th class="c-layer">Layer</th><th class="c-when">Last run</th><th class="c-result">Last result</th><th class="c-dur">Duration</th><th class="c-run"><span class="sr">Run</span></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title">
+  <div class="drawer-head"><h2 id="d-title"></h2><button class="btn-sm" id="d-close">Close</button></div>
+  <div class="drawer-body" id="d-body"></div>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
+<script src="/admin/ops-admin.js"></script>
+<script>
+const S = { scripts: [], filters: { product: '', layer: '', status: '' }, q: '', open: null, pending: {}, timer: null, loading: false };
+
+OpsAdmin.boot({
+  onReady: () => { loadScripts(); const slug = new URLSearchParams(location.search).get('script'); if (slug) openDrawer(slug); },
+});
+
+document.querySelectorAll('.chips').forEach((g) => g.addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  g.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === b));
+  S.filters[g.dataset.filter] = b.dataset.v;
+  render();
+}));
+document.getElementById('search').addEventListener('input', (e) => { S.q = e.target.value.trim().toLowerCase(); render(); });
+document.getElementById('run-all').addEventListener('click', runAll);
+document.getElementById('d-close').addEventListener('click', closeDrawer);
+document.getElementById('overlay').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+document.getElementById('rows').addEventListener('click', (e) => {
+  const run = e.target.closest('[data-run]');
+  if (run) { e.stopPropagation(); runScript(run.dataset.run); return; }
+  const tr = e.target.closest('tr[data-slug]'); if (tr) openDrawer(tr.dataset.slug);
+});
+document.getElementById('rows').addEventListener('keydown', (e) => {
+  const tr = e.target.closest('tr[data-slug]');
+  if (tr && e.target === tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrawer(tr.dataset.slug); }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadScripts(); });
+
+const { esc, ago, dur, fmtDate, statusOf, isOpen, api } = OpsAdmin;
+
+function banner(msg) { const b = document.getElementById('banner'); b.textContent = msg || ''; b.style.display = msg ? '' : 'none'; }
+
+async function loadScripts() {
+  if (S.loading) return; S.loading = true;
+  try {
+    const d = await api('/api/ops/scripts');
+    S.scripts = d.scripts || [];
+    banner('');
+    // Clear optimistic "pending" once the runner has written newer rows.
+    for (const [product, since] of Object.entries(S.pending)) {
+      const caught = S.scripts.filter((s) => s.product === product && s.layer === 'backend')
+        .every((s) => s.latest_run && new Date(s.latest_run.started_at) >= new Date(since - 5000));
+      if (caught || Date.now() - since > 90000) delete S.pending[product];
+    }
+    render();
+    if (S.open) refreshDrawer();
+  } catch (err) { banner(err.message); }
+  finally { S.loading = false; schedule(); }
+}
+
+function schedule() {
+  clearTimeout(S.timer);
+  const busy = Object.keys(S.pending).length || S.scripts.some((s) => isOpen(s.latest_run));
+  S.timer = setTimeout(loadScripts, busy ? 4000 : 60000);
+}
+
+function rowStatus(s) {
+  if (s.layer === 'backend' && S.pending[s.product]) return 'running';
+  return statusOf(s.latest_run);
+}
+
+function visible() {
+  const f = S.filters;
+  return S.scripts.filter((s) => {
+    if (f.product && s.product !== f.product) return false;
+    if (f.layer && s.layer !== f.layer) return false;
+    const st = rowStatus(s);
+    if (f.status === 'failing' && !['fail', 'error', 'warn'].includes(st)) return false;
+    if (f.status === 'passing' && st !== 'pass') return false;
+    if (f.status === 'never' && st !== 'never') return false;
+    if (S.q && !`${s.name} ${s.slug} ${s.description || ''}`.toLowerCase().includes(S.q)) return false;
+    return true;
+  });
+}
+
+const PRODUCT = { support: 'Support', sales: 'Sales', pma: 'PMA' };
+
+function render() {
+  const list = visible();
+  document.getElementById('count').textContent = `${list.length} of ${S.scripts.length} scripts`;
+  const tb = document.getElementById('rows');
+  if (!S.scripts.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">No scripts in the directory yet.</td></tr>'; }
+  else if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">No scripts match these filters.</td></tr>'; }
+  else tb.innerHTML = list.map((s) => {
+    const r = s.latest_run; const st = rowStatus(s); const running = st === 'running' || st === 'queued';
+    return `<tr data-slug="${esc(s.slug)}" tabindex="0" class="${S.open === s.slug ? 'sel' : ''}${s.enabled === false ? ' off' : ''}">
+      <td class="c-dot"><span class="dot ${st}" title="${esc(st)}"></span></td>
+      <td><div class="s-name">${esc(s.name)}</div><div class="s-slug">${esc(s.slug)}${s.enabled === false ? ' · disabled' : ''}</div></td>
+      <td class="c-prod">${esc(PRODUCT[s.product] || s.product)}</td>
+      <td class="c-layer"><span class="tag">${esc(s.layer)}</span></td>
+      <td class="c-when">${r ? esc(ago(r.started_at)) : '<span class="muted">Never</span>'}</td>
+      <td class="c-result">${running ? '<span class="spin" aria-hidden="true"></span> Running' : r ? `<span class="res ${st}">${esc(st.toUpperCase())}</span> <span class="muted">${esc((r.summary || '').slice(0, 90))}</span>` : '<span class="muted">No runs yet</span>'}</td>
+      <td class="c-dur">${r && !running ? esc(dur(r.duration_ms)) : ''}</td>
+      <td class="c-run"><button class="btn-sm" data-run="${esc(s.slug)}" ${running || s.enabled === false ? 'disabled' : ''}>${running ? '<span class="spin"></span>' : 'Run'}</button></td>
+    </tr>`;
+  }).join('');
+  renderHealth();
+}
+
+function renderHealth() {
+  const prods = S.filters.product ? [S.filters.product] : ['support', 'sales', 'pma'];
+  document.getElementById('health').innerHTML = prods.map((p) => {
+    const c = { pass: 0, fail: 0, warn: 0, never: 0 };
+    S.scripts.filter((s) => s.product === p).forEach((s) => {
+      const st = rowStatus(s);
+      if (st === 'pass') c.pass++; else if (st === 'fail' || st === 'error') c.fail++; else if (st === 'warn') c.warn++; else if (st === 'never') c.never++;
+    });
+    return `<div class="health-row"><span class="h-name">${PRODUCT[p]}</span><span class="h-pass" title="Passing">${c.pass}</span><span class="h-fail" title="Failing">${c.fail}</span><span class="h-warn" title="Warning">${c.warn}</span>${c.never ? `<span class="h-never" title="Never run">${c.never}</span>` : ''}</div>`;
+  }).join('') + '<div class="health-key"><span class="h-pass">pass</span><span class="h-fail">fail</span><span class="h-warn">warn</span><span class="h-never">never</span></div>';
+  const btn = document.getElementById('run-all');
+  btn.disabled = !S.filters.product;
+  btn.textContent = S.filters.product ? `Run all ${PRODUCT[S.filters.product]} scripts` : 'Run all for this product';
+  if (!S.filters.product) document.getElementById('run-all-msg').textContent = 'Pick a product above to run its whole suite.';
+}
+
+async function runScript(slug, msgEl) {
+  const s = S.scripts.find((x) => x.slug === slug); if (!s) return;
+  const setMsg = (t) => { if (msgEl) msgEl.textContent = t; else if (t) banner(t); };
+  setMsg('Starting…');
+  try {
+    const d = await api('/api/ops/run', { method: 'POST', body: { slug } });
+    if (d.state === 'queued') S.pending[s.product] = Date.now();
+    setMsg(d.message || 'Running.');
+    if (!msgEl) setTimeout(() => banner(''), 4000);
+    await loadScripts();
+  } catch (err) { setMsg(err.message); }
+}
+
+async function runAll() {
+  const p = S.filters.product; if (!p) return;
+  const msg = document.getElementById('run-all-msg'); const btn = document.getElementById('run-all');
+  btn.disabled = true; msg.textContent = 'Starting…';
+  try {
+    const d = await api('/api/ops/run-all', { method: 'POST', body: { product: p } });
+    if (d.backend?.state === 'queued') S.pending[p] = Date.now();
+    const parts = [];
+    if (d.agent.started) parts.push(`${d.agent.started} agent test${d.agent.started > 1 ? 's' : ''} started`);
+    if (d.agent.skipped.length) parts.push(`${d.agent.skipped.length} already running`);
+    if (d.agent.errors.length) parts.push(`${d.agent.errors.length} failed to start (${d.agent.errors[0].error})`);
+    if (d.backend.state !== 'none') parts.push(`Backend: ${d.backend.message}`);
+    msg.textContent = parts.join('. ') || 'Nothing to run.';
+    await loadScripts();
+  } catch (err) { msg.textContent = err.message; }
+  finally { btn.disabled = !S.filters.product; }
+}
+
+// ---------- Drawer ----------
+function openDrawer(slug) {
+  S.open = slug;
+  history.replaceState(null, '', `/admin/testing?script=${encodeURIComponent(slug)}`);
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('d-title').textContent = (S.scripts.find((s) => s.slug === slug) || {}).name || slug;
+  document.getElementById('d-body').innerHTML = '<p class="muted">Loading…</p>';
+  render(); refreshDrawer();
+}
+function closeDrawer() {
+  if (!S.open) return;
+  S.open = null; history.replaceState(null, '', '/admin/testing');
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  render();
+}
+
+async function refreshDrawer() {
+  const slug = S.open; if (!slug) return;
+  const body = document.getElementById('d-body');
+  const keepMsg = document.getElementById('d-msg')?.textContent || '';
+  try {
+    const d = await api(`/api/ops/scripts/${encodeURIComponent(slug)}`);
+    if (S.open !== slug) return;
+    const s = d.script; const r = d.latest_run;
+    const pending = s.layer === 'backend' && S.pending[s.product];
+    const st = pending ? 'running' : statusOf(r);
+    const running = st === 'running' || st === 'queued';
+    document.getElementById('d-title').textContent = s.name;
+    body.innerHTML = `
+      <div class="meta-row"><span class="tag">${esc(PRODUCT[s.product] || s.product)}</span><span class="tag">${esc(s.layer)}</span>${s.enabled === false ? '<span class="tag warn">disabled</span>' : ''}<span class="muted mono">${esc(s.slug)}</span></div>
+      ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ''}
+      ${s.layer === 'agent' ? OpsAdmin.agentSpec(s) : `<div class="field-row"><span class="field-label">Check key</span><span class="field-val mono">${esc(s.check_key || '—')}</span></div>`}
+      <div class="section-sep">Latest result</div>
+      ${r || pending ? `
+        <div class="result-head"><span class="dot ${st}"></span><span class="res ${st}">${running ? 'RUNNING' : esc(st.toUpperCase())}</span>${running ? '<span class="spin"></span>' : ''}</div>
+        ${r ? OpsAdmin.runDetail(r, s) : '<p class="muted">Backend group queued. Results appear here as they land.</p>'}
+      ` : '<div class="empty-sm">No runs yet.</div>'}
+      ${s.layer === 'backend' ? `<p class="note">Backend scripts run with the rest of the ${esc(PRODUCT[s.product])} backend group so setup and cleanup stay paired.</p>` : ''}
+      <div class="drawer-actions">
+        <button class="btn-primary" id="d-run" ${running || s.enabled === false ? 'disabled' : ''}>${running ? 'Running…' : 'Run now'}</button>
+        <a class="btn-outline" href="/admin/testing/script/${encodeURIComponent(s.slug)}">View history report</a>
+      </div>
+      <p class="inline-msg" id="d-msg" role="status">${esc(keepMsg)}</p>`;
+    document.getElementById('d-run').addEventListener('click', () => runScript(s.slug, document.getElementById('d-msg')));
+  } catch (err) {
+    body.innerHTML = `<div class="err-box">${esc(err.message)}</div><button class="btn-sm" id="d-retry">Try again</button>`;
+    document.getElementById('d-retry').addEventListener('click', refreshDrawer);
+  }
+}
+</script>
+</body></html>

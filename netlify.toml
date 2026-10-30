@@ -19,6 +19,9 @@
   [functions."cedar-elevenlabs"]
     timeout = 15
 
+  [functions."ops-admin-api"]
+    timeout = 26
+
 [[redirects]]
   from = "/api/intake"
   to = "/.netlify/functions/pma-intake"
@@ -116,3 +119,27 @@
   for = "/command-center/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
+
+[[redirects]]
+  from = "/api/ops/*"
+  to = "/.netlify/functions/ops-admin-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin/testing/script/*"
+  to = "/admin/testing-history.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin/testing"
+  to = "/admin/testing.html"
+  status = 200
+
+# Simulation Testing admin panel: never indexed.
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-store"
