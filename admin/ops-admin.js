@@ -59,9 +59,14 @@
   async function signOut() { await sb.auth.signOut(); session = null; show(false); }
 
   // Throws Error(message) on any failure; callers show it inline.
+  // Last 50 failed API calls on this page, included in every JSON report.
+  const errorLog = [];
+  function logError(entry) { errorLog.push({ at: new Date().toISOString(), ...entry }); if (errorLog.length > 50) errorLog.shift(); }
+
   async function api(path, { method = 'GET', body } = {}) {
     const { data } = await sb.auth.getSession();
     session = data.session || session;
+    const t0 = performance.now();
     let res;
     try {
       res = await fetch(path, {
@@ -69,12 +74,44 @@
         headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
         body: body ? JSON.stringify(body) : undefined,
       });
-    } catch { throw new Error('Network error. Check your connection.'); }
+    } catch (e) {
+      logError({ method, path, request_body: body || null, status: 0, error: 'Network error: ' + (e?.message || e) });
+      throw new Error('Network error. Check your connection.');
+    }
     let d = {};
     try { d = await res.json(); } catch { /* empty */ }
+    if (!res.ok) logError({ method, path, request_body: body || null, status: res.status, error: d.error || null, response: d, ms: Math.round(performance.now() - t0) });
     if (res.status === 401) { await signOut(); $('login-msg').textContent = d.error || 'Sign in again.'; throw new Error(d.error || 'Sign in required'); }
     if (!res.ok) throw new Error(d.error || `Request failed (HTTP ${res.status})`);
     return d;
+  }
+
+  // ---------- JSON reports ----------
+  function report(kind, payload) {
+    return {
+      report: kind,
+      generated_at: new Date().toISOString(),
+      generated_by: session?.user?.email || null,
+      site: location.host,
+      page: location.pathname + location.search,
+      user_agent: navigator.userAgent,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ...payload,
+      client_errors: errorLog.slice(),
+    };
+  }
+  function download(name, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  // Agent run detail as a reviewer reads it: each criterion with its own verdict.
+  function explainRun(r) {
+    if (!r) return null;
+    return { ...r, outcome: r.status, open: isOpen(r), duration_human: dur(r.duration_ms) || null };
   }
 
   // ---------- formatting ----------
@@ -153,5 +190,5 @@
       ${r.external_id ? `<p class="muted mono small">ElevenLabs invocation ${esc(r.external_id)}${r.external_run_id ? ` · run ${esc(r.external_run_id)}` : ''}</p>` : ''}`;
   }
 
-  window.OpsAdmin = { boot, api, esc, ago, dur, fmtDate, statusOf, isOpen, trigger, agentSpec, runDetail };
+  window.OpsAdmin = { boot, api, esc, ago, dur, fmtDate, statusOf, isOpen, trigger, agentSpec, runDetail, report, download, stamp, explainRun, errorLog };
 })();

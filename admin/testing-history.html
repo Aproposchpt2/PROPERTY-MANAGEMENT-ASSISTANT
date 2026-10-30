@@ -27,7 +27,7 @@
 <div id="app" class="hist-shell" style="display:none">
   <div class="hist-top">
     <a class="back" id="back" href="/admin/testing">← Back to directory</a>
-    <div class="hist-user"><span id="user-email"></span><button class="btn-sm" id="sign-out">Sign out</button></div>
+    <div class="hist-user"><button class="btn-sm" id="h-dl">Download JSON</button><span id="user-email"></span><button class="btn-sm" id="sign-out">Sign out</button></div>
   </div>
   <header class="hist-head">
     <div class="meta-row" id="h-meta"></div>
@@ -102,6 +102,22 @@ function render() {
     </div>`;
   }).join('');
 }
+
+document.getElementById('h-dl').addEventListener('click', () => {
+  const done = runs.filter((r) => !isOpen(r)); const last30 = done.slice(0, 30);
+  const by = (st) => done.filter((r) => r.status === st).length;
+  OpsAdmin.download(`ops-${slug}-history-${OpsAdmin.stamp()}.json`, OpsAdmin.report(script ? 'history' : 'error', {
+    script_slug: slug,
+    script,
+    stats: script ? {
+      runs: runs.length, pass: by('pass'), fail: by('fail'), error: by('error'), warn: by('warn'), open: runs.length - done.length,
+      pass_rate_last_30: last30.length ? Math.round((last30.filter((r) => r.status === 'pass').length / last30.length) * 100) : null,
+      failing_since: (() => { let i = 0; while (i < done.length && done[i].status !== 'pass') i++; return i ? done[i - 1].started_at : null; })(),
+    } : null,
+    runs: runs.map(OpsAdmin.explainRun),
+    page_error: document.getElementById('h-error').style.display === 'none' ? null : document.getElementById('h-error').textContent,
+  }));
+});
 
 document.getElementById('h-runs').addEventListener('click', (e) => {
   const b = e.target.closest('.run-row'); if (!b) return;

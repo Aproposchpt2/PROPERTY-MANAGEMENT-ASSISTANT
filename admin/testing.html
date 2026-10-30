@@ -44,6 +44,8 @@
         <div id="health"></div>
         <button class="btn-primary run-all" id="run-all" disabled>Run all for this product</button>
         <p class="run-all-msg" id="run-all-msg" role="status"></p>
+        <button class="btn-sm dl-btn" id="dl-failures" title="Every failing or warning script with its latest run, as JSON">Download failure report (JSON)</button>
+        <button class="btn-sm dl-btn" id="dl-all" title="Every script in the current filter with its latest run, as JSON">Download full report (JSON)</button>
       </div>
     </div>
     <div class="ops-left-foot">
@@ -91,6 +93,26 @@ document.querySelectorAll('.chips').forEach((g) => g.addEventListener('click', (
 }));
 document.getElementById('search').addEventListener('input', (e) => { S.q = e.target.value.trim().toLowerCase(); render(); });
 document.getElementById('run-all').addEventListener('click', runAll);
+document.getElementById('dl-failures').addEventListener('click', () => directoryReport(true));
+document.getElementById('dl-all').addEventListener('click', () => directoryReport(false));
+
+function directoryReport(failingOnly) {
+  const rows = (failingOnly ? S.scripts : visible()).map((s) => ({ ...s, status: rowStatus(s) }))
+    .filter((s) => !failingOnly || ['fail', 'error', 'warn'].includes(s.status));
+  const counts = {};
+  for (const s of S.scripts) {
+    const c = (counts[s.product] ||= { pass: 0, fail: 0, error: 0, warn: 0, running: 0, never: 0 });
+    const st = rowStatus(s) === 'queued' ? 'running' : rowStatus(s);
+    c[st] = (c[st] || 0) + 1;
+  }
+  OpsAdmin.download(`ops-${failingOnly ? 'failures' : 'report'}-${OpsAdmin.stamp()}.json`, OpsAdmin.report(failingOnly ? 'failures' : 'directory', {
+    filters: failingOnly ? null : { ...S.filters, search: S.q || null },
+    health: counts,
+    script_count: rows.length,
+    scripts: rows.map(({ latest_run, ...script }) => ({ script, latest_run: OpsAdmin.explainRun(latest_run) })),
+    last_banner: document.getElementById('banner').textContent || null,
+  }));
+}
 document.getElementById('d-close').addEventListener('click', closeDrawer);
 document.getElementById('overlay').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
@@ -266,12 +288,17 @@ async function refreshDrawer() {
       <div class="drawer-actions">
         <button class="btn-primary" id="d-run" ${running || s.enabled === false ? 'disabled' : ''}>${running ? 'Running…' : 'Run now'}</button>
         <a class="btn-outline" href="/admin/testing/script/${encodeURIComponent(s.slug)}">View history report</a>
+        <button class="btn-sm" id="d-dl">Download JSON</button>
       </div>
       <p class="inline-msg" id="d-msg" role="status">${esc(keepMsg)}</p>`;
     document.getElementById('d-run').addEventListener('click', () => runScript(s.slug, document.getElementById('d-msg')));
+    document.getElementById('d-dl').addEventListener('click', () => OpsAdmin.download(`ops-${s.slug}-${OpsAdmin.stamp()}.json`,
+      OpsAdmin.report('script', { script: s, latest_run: OpsAdmin.explainRun(r), backend_group_pending: !!pending })));
   } catch (err) {
-    body.innerHTML = `<div class="err-box">${esc(err.message)}</div><button class="btn-sm" id="d-retry">Try again</button>`;
+    body.innerHTML = `<div class="err-box">${esc(err.message)}</div><div class="drawer-actions"><button class="btn-sm" id="d-retry">Try again</button><button class="btn-sm" id="d-dl-err">Download error report (JSON)</button></div>`;
     document.getElementById('d-retry').addEventListener('click', refreshDrawer);
+    document.getElementById('d-dl-err').addEventListener('click', () => OpsAdmin.download(`ops-error-${slug}-${OpsAdmin.stamp()}.json`,
+      OpsAdmin.report('error', { script_slug: slug, error: err.message })));
   }
 }
 </script>
