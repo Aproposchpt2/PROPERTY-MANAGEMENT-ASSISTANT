@@ -2,10 +2,16 @@
 
 // Public consultation intake for pma.stellaruc.com/intake.html.
 // Mirrors the stellaruc.com intake (name, business name, phone, email, optional SMS consent).
-// Delivery is email-only: each submission is emailed to the owner via Resend.
-// Nothing is stored, so the request only succeeds when the email is accepted.
+// Each submission becomes a lead in the Apropos Group Lead Management pipeline (same tenant,
+// tables and RPCs as stellaruc.com/api/public/intake), then the owner is emailed (best effort).
+
+let clientOverride = null; // test hook
 
 const NOTIFY_EMAIL = 'jmitchell@aproposgroupllc.com';
+// Apropos Group LLC tenant and actor used by the stellaruc.com intake; overridable per environment.
+const LEAD_TENANT_ID = process.env.AI4CC_LEAD_TENANT_ID || '5885a020-d363-4c27-910a-c035eda132f5';
+const ACTOR_USER_ID = process.env.AI4CC_INTAKE_FALLBACK_ACTOR_ID || '735fc481-1b75-4cf3-9f68-128e9e169fdc';
+const SOURCE = 'pma_stellaruc_intake';
 const SMS_CONSENT_TEXT =
   'Yes, StellarUC (Apropos Group LLC) may send me text messages about my inquiry and consultation. ' +
   'Message frequency varies. Msg & data rates may apply. Reply STOP to opt out or HELP for help. ' +
@@ -38,7 +44,7 @@ function sameOrigin(headers) {
 async function sendEmail({ name, businessName, phone, email, smsConsent, at }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !from) throw new Error('EMAIL_NOT_CONFIGURED');
+  if (!apiKey || !from) { console.warn('[pma-intake] Resend not configured; skipping owner email'); return; }
   const to = process.env.PMA_INTAKE_TO_EMAIL || process.env.OWNER_NOTIFICATION_EMAIL || NOTIFY_EMAIL;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -49,13 +55,71 @@ async function sendEmail({ name, businessName, phone, email, smsConsent, at }) {
       reply_to: email,
       subject: `New PMA consultation request: ${businessName}`,
       text:
-        'New consultation request from pma.stellaruc.com/intake.html.\n\n' +
+        'New consultation request from pma.stellaruc.com/intake.html.\n' +
+        'Already in the workspace under Lead Management / Customer 360.\n\n' +
         `Name: ${name}\nBusiness: ${businessName}\nPhone: ${phone}\nEmail: ${email}\n` +
         `SMS consent: ${smsConsent ? `Yes (${at})\nConsent text: ${SMS_CONSENT_TEXT}` : 'No'}\n`,
     }),
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`EMAIL_SEND_FAILED_${res.status}`);
+  if (!res.ok) console.error('[pma-intake] owner email failed', res.status);
+}
+
+async function saveLead(db, { name, businessName, phone, email, smsConsent, clientToken, at }) {
+  // Idempotent on (tenant_id, channel, external_id): one clientToken per page load.
+  const { error: upsertError } = await db.from('ai4cc_interactions').upsert(
+    {
+      tenant_id: LEAD_TENANT_ID, channel: 'email', direction: 'inbound', external_id: clientToken,
+      customer_identifier: email, status: 'completed', started_at: at, ended_at: at,
+      metadata: {
+        source: SOURCE, product: 'Property Management Assistant', name, businessName, phone, email,
+        sms_consent: { granted: smsConsent, text: smsConsent ? SMS_CONSENT_TEXT : null, at },
+      },
+    },
+    { onConflict: 'tenant_id,channel,external_id', ignoreDuplicates: true },
+  );
+  if (upsertError) throw upsertError;
+
+  const { data: interaction, error: fetchError } = await db.from('ai4cc_interactions').select('id')
+    .eq('tenant_id', LEAD_TENANT_ID).eq('channel', 'email').eq('external_id', clientToken).single();
+  if (fetchError) throw fetchError;
+
+  const { data: existing, error: lookupError } = await db.from('ai4cc_leads').select('id')
+    .eq('tenant_id', LEAD_TENANT_ID).eq('originating_interaction_id', interaction.id).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return false;
+
+  const { data: created, error: rpcError } = await db.rpc('ai4cc_create_lead_from_interaction', {
+    p_tenant_id: LEAD_TENANT_ID, p_actor_user_id: ACTOR_USER_ID, p_interaction_id: interaction.id,
+    p_identifier_type: 'email', p_identifier_value: email, p_email: email, p_phone: phone,
+    p_contact_name: name, p_company_name: businessName, p_title: 'PMA website intake',
+    p_service_interest: 'Property Management Assistant',
+    p_description: `PMA website intake form submitted. Name: ${name}. Business: ${businessName}. Wants a Property Management Assistant consultation.`,
+    p_pipeline_stage: 'new', p_priority: 'normal', p_score: 50, p_estimated_value: 0, p_probability: 0,
+    p_next_action: 'Contact to schedule Property Management Assistant consultation.', p_next_follow_up: null,
+  });
+  if (rpcError) throw rpcError;
+
+  const leadId = created && created.lead && created.lead.id;
+  if (leadId) {
+    const { error: activityError } = await db.rpc('ai4cc_record_lead_activity', {
+      p_tenant_id: LEAD_TENANT_ID, p_actor_user_id: ACTOR_USER_ID, p_lead_id: leadId,
+      p_activity_type: 'website_intake', p_direction: 'inbound', p_subject: 'PMA website intake form submitted',
+      p_body: `Name: ${name}\nBusiness: ${businessName}\nPhone: ${phone}\nEmail: ${email}\nSource: pma.stellaruc.com/intake.html`,
+      p_outcome: null,
+    });
+    if (activityError) throw activityError;
+  }
+  return true;
+}
+
+function admin() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (clientOverride) return clientOverride;
+  if (!url || !key) throw new Error('SUPABASE_NOT_CONFIGURED');
+  const { createClient } = require('@supabase/supabase-js');
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 exports.handler = async (event) => {
@@ -76,16 +140,22 @@ exports.handler = async (event) => {
   if (!businessName) return reply(400, { error: 'Business name is required.' });
   if (!phone) return reply(400, { error: 'A valid phone number is required.' });
   if (!EMAIL_RE.test(email)) return reply(400, { error: 'A valid email address is required.' });
-  if (!CLIENT_TOKEN_RE.test(text(body.clientToken, 80))) return reply(400, { error: 'Invalid submission token.' });
+  const clientToken = text(body.clientToken, 80);
+  if (!CLIENT_TOKEN_RE.test(clientToken)) return reply(400, { error: 'Invalid submission token.' });
   if (website) return reply(200, { ok: true });
 
+  const at = new Date().toISOString();
   try {
-    await sendEmail({ name, businessName, phone, email, smsConsent, at: new Date().toISOString() });
+    const isNew = await saveLead(admin(), { name, businessName, phone, email, smsConsent, clientToken, at });
+    if (isNew) {
+      try { await sendEmail({ name, businessName, phone, email, smsConsent, at }); }
+      catch (err) { console.error('[pma-intake] owner email failed:', err.message); }
+    }
     return reply(200, { ok: true });
   } catch (err) {
-    console.error('[pma-intake] failed:', err.message);
-    return reply(500, { error: 'We could not send your information. Please try again or call us.' });
+    console.error('[pma-intake] failed:', err.message || err);
+    return reply(500, { error: 'We could not save your information. Please try again.' });
   }
 };
 
-exports._test = { normalizePhone, sameOrigin };
+exports._test = { normalizePhone, sameOrigin, setClient: (c) => { clientOverride = c; } };
