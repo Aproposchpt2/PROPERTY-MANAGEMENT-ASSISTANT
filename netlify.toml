@@ -78,3 +78,35 @@
   to = "/.netlify/functions/pma-approve-api"
   status = 200
   force = true
+
+# SEO: keep internal, portal and legacy (FlowDesk-branded) pages out of search results.
+# The public marketing page (/) is indexable; see robots.txt and sitemap.xml.
+[[headers]]
+  for = "/dashboard.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/demo-request.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/past-performance.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/privacy.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, follow"
+
+[[headers]]
+  for = "/terms.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, follow"
+
+[[headers]]
+  for = "/command-center/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
