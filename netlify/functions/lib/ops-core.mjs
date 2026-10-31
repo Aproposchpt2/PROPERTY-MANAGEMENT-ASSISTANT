@@ -146,6 +146,9 @@ function settleFromTestRun(row, tr) {
 
 // Polls ElevenLabs for open agent runs (one call per invocation), closes timed-out
 // runs, and closes backend rows the runner never finished. Never throws.
+// Scheduled agent runs are often first checked long after they finish (the daily
+// alert job runs 40 minutes after they start), so ElevenLabs is always asked for
+// the result before an old run is marked as timed out.
 export async function refreshOpenRuns({ scriptId, force = false } = {}) {
   const sb = db();
   let q = sb.from('ops_test_runs').select('*').in('status', OPEN).limit(200);
@@ -153,29 +156,32 @@ export async function refreshOpenRuns({ scriptId, force = false } = {}) {
   const { data: open, error } = await q;
   if (error || !open?.length) return;
   const now = Date.now();
+  const ageOf = (row) => now - new Date(row.started_at || row.created_at || now).getTime();
   const byInvocation = {};
   const updates = [];
 
   for (const row of open) {
-    const age = now - new Date(row.started_at || row.created_at || now).getTime();
     if (row.external_id) {
-      if (age > AGENT_TIMEOUT_MS) {
-        updates.push([row.id, { status: 'error', summary: 'Timed out: no result from ElevenLabs after 10 minutes', finished_at: new Date().toISOString(), duration_ms: age }]);
-      } else {
-        (byInvocation[row.external_id] ||= []).push(row);
-      }
-    } else if (age > BACKEND_TIMEOUT_MS) {
-      updates.push([row.id, { status: 'error', summary: 'Timed out: the backend runner never reported a result', finished_at: new Date().toISOString(), duration_ms: age }]);
+      (byInvocation[row.external_id] ||= []).push(row);
+    } else if (ageOf(row) > BACKEND_TIMEOUT_MS) {
+      updates.push([row.id, { status: 'error', summary: 'Timed out: the backend runner never reported a result', finished_at: new Date().toISOString(), duration_ms: ageOf(row) }]);
     }
   }
 
+  const timeOut = (row, why) => {
+    const age = ageOf(row);
+    if (age > AGENT_TIMEOUT_MS) updates.push([row.id, { status: 'error', summary: `Timed out: ${why} after ${Math.round(age / 60000)} minutes`, finished_at: new Date().toISOString(), duration_ms: age }]);
+  };
+
   await Promise.all(Object.entries(byInvocation).map(async ([inv, rows]) => {
-    if (!force && now - (_lastPoll.get(inv) || 0) < 3500) return;
+    const overdue = rows.some((row) => ageOf(row) > AGENT_TIMEOUT_MS);
+    if (!force && !overdue && now - (_lastPoll.get(inv) || 0) < 3500) return;
     _lastPoll.set(inv, now);
     try {
       const r = await fetchJson(`${EL_BASE}/test-invocations/${encodeURIComponent(inv)}`, { headers: elHeaders() });
       if (!r.ok) {
         if (r.status === 404) for (const row of rows) updates.push([row.id, { status: 'error', summary: 'ElevenLabs no longer has this test invocation', finished_at: new Date().toISOString() }]);
+        else for (const row of rows) timeOut(row, `ElevenLabs returned HTTP ${r.status} when asked for the result`);
         return;
       }
       const testRuns = r.json?.test_runs || [];
@@ -184,8 +190,11 @@ export async function refreshOpenRuns({ scriptId, force = false } = {}) {
           || testRuns.find((t) => t.test_id === row.detail?.test_id);
         const patch = settleFromTestRun(row, tr);
         if (patch) updates.push([row.id, patch]);
+        else timeOut(row, `ElevenLabs still reports this test as ${String(tr?.status || 'missing').toLowerCase()}`);
       }
-    } catch { /* leave open; next poll retries */ }
+    } catch {
+      for (const row of rows) timeOut(row, 'ElevenLabs could not be reached for the result');
+    }
   }));
 
   await Promise.all(updates.map(([id, patch]) => sb.from('ops_test_runs').update(patch).eq('id', id).in('status', OPEN)));
