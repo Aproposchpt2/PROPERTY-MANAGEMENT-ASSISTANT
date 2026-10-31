@@ -1,17 +1,22 @@
-// Simulation Testing admin API (routed at /api/ops/*). Identical on the PMA and
-// specialist sites. Every route needs a Supabase session token whose email is in
-// ops_admins; anyone else gets 403.
+// Simulation Testing admin API (routed at /api/ops/*). Identical file on the PMA,
+// Specialist and Sales sites; each site manages only its own product (siteProduct()).
+// Every route needs a Supabase session token whose email is in ops_admins.
 //
-//   GET  /api/ops/scripts                 directory + latest run per script
+//   GET  /api/ops/scripts                 this site's scripts + latest runs, plus a
+//                                         read-only health overview of every product
 //   GET  /api/ops/scripts/:slug           one script + latest run (drawer)
 //   GET  /api/ops/scripts/:slug/runs      run history (?limit=50, max 200)
-//   POST /api/ops/run      {slug}         run one script
-//   POST /api/ops/run-all  {product}      run every enabled script for a product
+//   POST /api/ops/run      {slug}         run one script (this site's product only)
+//   POST /api/ops/run-all                 run every enabled test for this site
+//   POST /api/ops/stress                  start this site's stress test (on demand)
 
 import {
-  PRODUCTS, db, listScripts, getScript, latestRuns, runHistory,
-  refreshOpenRuns, startAgentRuns, startBackendGroup,
+  PRODUCTS, db, listScripts, getScript, latestRuns, runHistory, siteProduct,
+  refreshOpenRuns, startAgentRuns, startBackendGroup, startStress,
 } from './lib/ops-core.mjs';
+
+const isStress = (s) => /\.stress$/.test(String(s?.check_key || ''));
+const RUN_CODE = { queued: 202, cooldown: 429, running: 409, error: 502, none: 404 };
 
 const HEADERS = {
   'content-type': 'application/json',
@@ -70,11 +75,22 @@ export const handler = async (event) => {
 
     // GET /scripts
     if (event.httpMethod === 'GET' && seg[0] === 'scripts' && seg.length === 1) {
+      const product = siteProduct();
       await refreshOpenRuns();
-      const scripts = await listScripts();
-      const latest = await latestRuns(scripts.map((s) => s.id));
+      const all = await listScripts();
+      const latest = await latestRuns(all.map((s) => s.id));
+      const overview = Object.fromEntries(PRODUCTS.map((p) => [p, { pass: 0, fail: 0, warn: 0, running: 0, never: 0, last_run_at: null }]));
+      for (const s of all) {
+        if (s.enabled === false || !overview[s.product] || isStress(s)) continue;
+        const r = latest[s.id]; const o = overview[s.product];
+        const st = !r ? 'never' : r.status === 'error' ? 'fail' : (r.status === 'queued' ? 'running' : r.status);
+        o[st] = (o[st] || 0) + 1;
+        if (r?.started_at && (!o.last_run_at || r.started_at > o.last_run_at)) o.last_run_at = r.started_at;
+      }
       return json(200, {
-        scripts: scripts.map((s) => ({ ...s, latest_run: latest[s.id] || null })),
+        product,
+        scripts: all.filter((s) => s.product === product).map((s) => ({ ...s, is_stress: isStress(s), latest_run: latest[s.id] || null })),
+        overview,
         email: who.email,
         server_time: new Date().toISOString(),
       });
@@ -85,6 +101,7 @@ export const handler = async (event) => {
       if (!SLUG.test(seg[1])) return json(400, { error: 'Bad script id' });
       const script = await getScript(seg[1]);
       if (!script) return json(404, { error: 'Script not found' });
+      script.is_stress = isStress(script);
       await refreshOpenRuns({ scriptId: script.id });
       if (seg.length === 2) {
         const latest = await latestRuns([script.id]);
@@ -104,7 +121,12 @@ export const handler = async (event) => {
       const script = await getScript(slug);
       if (!script) return json(404, { error: 'Script not found' });
       if (script.enabled === false) return json(409, { error: 'This script is disabled.' });
+      if (script.product !== siteProduct()) return json(403, { error: `Run this from the ${script.product} site's panel.` });
 
+      if (isStress(script)) {
+        const r = await startStress(trigger);
+        return json(RUN_CODE[r.state] || 500, r.state === 'queued' ? { state: 'queued', message: r.message } : { error: r.message, state: r.state });
+      }
       if (script.layer === 'agent') {
         const r = await startAgentRuns([script], trigger);
         if (r.started.length) return json(200, { state: 'running', run: r.started[0] });
@@ -113,7 +135,7 @@ export const handler = async (event) => {
       }
       if (script.layer === 'backend') {
         const r = await startBackendGroup(script.product, trigger);
-        const code = { queued: 202, cooldown: 429, running: 409, error: 502 }[r.state] || 500;
+        const code = RUN_CODE[r.state] || 500;
         return json(code, r.state === 'queued' ? { state: 'queued', product: script.product, message: r.message } : { error: r.message, state: r.state });
       }
       return json(400, { error: `Unknown layer: ${script.layer}` });
@@ -122,9 +144,8 @@ export const handler = async (event) => {
     // POST /run-all {product}
     if (event.httpMethod === 'POST' && seg[0] === 'run-all' && seg.length === 1) {
       if (!allow(`run:${who.email}`, 12)) return json(429, { error: 'Too many runs in a minute. Wait a moment.' });
-      const product = String(body.product || '');
-      if (!PRODUCTS.includes(product)) return json(400, { error: 'product must be support, sales or pma' });
-      const scripts = (await listScripts()).filter((s) => s.product === product && s.enabled !== false);
+      const product = siteProduct();
+      const scripts = (await listScripts()).filter((s) => s.product === product && s.enabled !== false && !isStress(s));
       const agent = scripts.filter((s) => s.layer === 'agent');
       const hasBackend = scripts.some((s) => s.layer === 'backend');
       const [a, b] = await Promise.all([
@@ -136,6 +157,13 @@ export const handler = async (event) => {
         agent: { started: a.started.length, skipped: a.skipped, errors: a.errors },
         backend: b,
       });
+    }
+
+    // POST /stress
+    if (event.httpMethod === 'POST' && seg[0] === 'stress' && seg.length === 1) {
+      if (!allow(`stress:${who.email}`, 3)) return json(429, { error: 'Too many stress tests in a minute.' });
+      const r = await startStress(trigger);
+      return json(RUN_CODE[r.state] || 500, r.state === 'queued' ? { state: 'queued', message: r.message } : { error: r.message, state: r.state });
     }
 
     return json(404, { error: 'Not found' });

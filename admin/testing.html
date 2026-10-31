@@ -25,27 +25,19 @@
 </div>
 
 <div id="app" class="ops-shell" style="display:none">
-  <aside class="ops-left" aria-label="Filters">
+  <aside class="ops-left" aria-label="Site tests">
     <div class="ops-left-top">
-      <h1 class="ops-title">Simulation Testing</h1>
-      <div class="filter-group"><span class="field-label">Product</span>
-        <div class="chips" data-filter="product">
-          <button class="chip active" data-v="">All</button><button class="chip" data-v="support">Support</button><button class="chip" data-v="sales">Sales</button><button class="chip" data-v="pma">PMA</button>
-        </div></div>
-      <div class="filter-group"><span class="field-label">Layer</span>
-        <div class="chips" data-filter="layer">
-          <button class="chip active" data-v="">All</button><button class="chip" data-v="agent">Agent</button><button class="chip" data-v="backend">Backend</button>
-        </div></div>
-      <div class="filter-group"><span class="field-label">Status</span>
-        <div class="chips" data-filter="status">
-          <button class="chip active" data-v="">All</button><button class="chip" data-v="failing">Failing</button><button class="chip" data-v="passing">Passing</button><button class="chip" data-v="never">Never run</button>
-        </div></div>
+      <h1 class="ops-title" id="site-title">Simulation Testing</h1>
       <div class="filter-group health-wrap"><span class="field-label">Health</span>
         <div id="health"></div>
-        <button class="btn-primary run-all" id="run-all" disabled>Run all for this product</button>
+        <button class="btn-primary run-all" id="run-all">Run all tests</button>
+        <button class="btn-sm dl-btn stress-btn" id="run-stress" title="25 concurrent synthetic calls against this site, then cleanup">Stress test</button>
         <p class="run-all-msg" id="run-all-msg" role="status"></p>
         <button class="btn-sm dl-btn" id="dl-failures" title="Every failing or warning script with its latest run, as JSON">Download failure report (JSON)</button>
-        <button class="btn-sm dl-btn" id="dl-all" title="Every script in the current filter with its latest run, as JSON">Download full report (JSON)</button>
+        <button class="btn-sm dl-btn" id="dl-all" title="Every script on this site with its latest run, as JSON">Download full report (JSON)</button>
+      </div>
+      <div class="filter-group overview-wrap"><span class="field-label">All sites</span>
+        <div id="overview"></div>
       </div>
     </div>
     <div class="ops-left-foot">
@@ -63,7 +55,7 @@
     <div id="banner" class="banner" role="alert" style="display:none"></div>
     <div class="table-wrap">
       <table class="ops-table">
-        <thead><tr><th class="c-dot"><span class="sr">Status</span></th><th>Script</th><th class="c-prod">Product</th><th class="c-layer">Layer</th><th class="c-when">Last run</th><th class="c-result">Last result</th><th class="c-dur">Duration</th><th class="c-run"><span class="sr">Run</span></th></tr></thead>
+        <thead><tr><th class="c-dot"><span class="sr">Status</span></th><th>Script</th><th class="c-layer">Layer</th><th class="c-when">Last run</th><th class="c-result">Last result</th><th class="c-dur">Duration</th><th class="c-run"><span class="sr">Run</span></th></tr></thead>
         <tbody id="rows"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
       </table>
     </div>
@@ -79,35 +71,28 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
 <script src="/admin/ops-admin.js"></script>
 <script>
-const S = { scripts: [], filters: { product: '', layer: '', status: '' }, q: '', open: null, pending: {}, timer: null, loading: false };
+const S = { product: null, scripts: [], overview: {}, q: '', open: null, pending: {}, timer: null, loading: false };
+const PRODUCT = { support: 'Specialist', sales: 'Sales', pma: 'PMA' };
+const SITE = { support: 'https://specialist.stellaruc.com', sales: 'https://sales.stellaruc.com', pma: 'https://pma.stellaruc.com' };
 
 OpsAdmin.boot({
   onReady: () => { loadScripts(); const slug = new URLSearchParams(location.search).get('script'); if (slug) openDrawer(slug); },
 });
 
-document.querySelectorAll('.chips').forEach((g) => g.addEventListener('click', (e) => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  g.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === b));
-  S.filters[g.dataset.filter] = b.dataset.v;
-  render();
-}));
 document.getElementById('search').addEventListener('input', (e) => { S.q = e.target.value.trim().toLowerCase(); render(); });
 document.getElementById('run-all').addEventListener('click', runAll);
+document.getElementById('run-stress').addEventListener('click', runStress);
 document.getElementById('dl-failures').addEventListener('click', () => directoryReport(true));
 document.getElementById('dl-all').addEventListener('click', () => directoryReport(false));
 
 function directoryReport(failingOnly) {
   const rows = (failingOnly ? S.scripts : visible()).map((s) => ({ ...s, status: rowStatus(s) }))
     .filter((s) => !failingOnly || ['fail', 'error', 'warn'].includes(s.status));
-  const counts = {};
-  for (const s of S.scripts) {
-    const c = (counts[s.product] ||= { pass: 0, fail: 0, error: 0, warn: 0, running: 0, never: 0 });
-    const st = rowStatus(s) === 'queued' ? 'running' : rowStatus(s);
-    c[st] = (c[st] || 0) + 1;
-  }
-  OpsAdmin.download(`ops-${failingOnly ? 'failures' : 'report'}-${OpsAdmin.stamp()}.json`, OpsAdmin.report(failingOnly ? 'failures' : 'directory', {
-    filters: failingOnly ? null : { ...S.filters, search: S.q || null },
-    health: counts,
+  OpsAdmin.download(`ops-${S.product || 'site'}-${failingOnly ? 'failures' : 'report'}-${OpsAdmin.stamp()}.json`, OpsAdmin.report(failingOnly ? 'failures' : 'directory', {
+    product: S.product,
+    search: failingOnly ? null : (S.q || null),
+    health: counts(),
+    all_sites: S.overview,
     script_count: rows.length,
     scripts: rows.map(({ latest_run, ...script }) => ({ script, latest_run: OpsAdmin.explainRun(latest_run) })),
     last_banner: document.getElementById('banner').textContent || null,
@@ -135,13 +120,15 @@ async function loadScripts() {
   if (S.loading) return; S.loading = true;
   try {
     const d = await api('/api/ops/scripts');
-    S.scripts = d.scripts || [];
+    S.product = d.product; S.scripts = d.scripts || []; S.overview = d.overview || {};
+    document.getElementById('site-title').textContent = `${PRODUCT[S.product] || ''} Testing`;
+    document.title = `${PRODUCT[S.product] || ''} Testing | Stellar Intelligent Technologies`;
     banner('');
-    // Clear optimistic "pending" once the runner has written newer rows.
-    for (const [product, since] of Object.entries(S.pending)) {
-      const caught = S.scripts.filter((s) => s.product === product && s.layer === 'backend')
-        .every((s) => s.latest_run && new Date(s.latest_run.started_at) >= new Date(since - 5000));
-      if (caught || Date.now() - since > 90000) delete S.pending[product];
+    // Clear optimistic "pending" once newer rows have landed.
+    for (const [kind, since] of Object.entries(S.pending)) {
+      const group = S.scripts.filter((s) => (kind === 'stress' ? s.is_stress : s.layer === 'backend' && !s.is_stress));
+      const caught = group.every((s) => s.latest_run && new Date(s.latest_run.started_at) >= new Date(since - 5000));
+      if (caught || Date.now() - since > 90000) delete S.pending[kind];
     }
     render();
     if (S.open) refreshDrawer();
@@ -156,39 +143,37 @@ function schedule() {
 }
 
 function rowStatus(s) {
-  if (s.layer === 'backend' && S.pending[s.product]) return 'running';
+  if (s.is_stress && S.pending.stress) return 'running';
+  if (!s.is_stress && s.layer === 'backend' && S.pending.backend) return 'running';
   return statusOf(s.latest_run);
 }
 
 function visible() {
-  const f = S.filters;
-  return S.scripts.filter((s) => {
-    if (f.product && s.product !== f.product) return false;
-    if (f.layer && s.layer !== f.layer) return false;
-    const st = rowStatus(s);
-    if (f.status === 'failing' && !['fail', 'error', 'warn'].includes(st)) return false;
-    if (f.status === 'passing' && st !== 'pass') return false;
-    if (f.status === 'never' && st !== 'never') return false;
-    if (S.q && !`${s.name} ${s.slug} ${s.description || ''}`.toLowerCase().includes(S.q)) return false;
-    return true;
-  });
+  return S.scripts.filter((s) => !S.q || `${s.name} ${s.slug} ${s.description || ''}`.toLowerCase().includes(S.q));
 }
 
-const PRODUCT = { support: 'Support', sales: 'Sales', pma: 'PMA' };
+function counts() {
+  const c = { pass: 0, fail: 0, warn: 0, running: 0, never: 0 };
+  S.scripts.filter((s) => !s.is_stress && s.enabled !== false).forEach((s) => {
+    const st = rowStatus(s);
+    if (st === 'pass') c.pass++; else if (st === 'fail' || st === 'error') c.fail++; else if (st === 'warn') c.warn++;
+    else if (st === 'running' || st === 'queued') c.running++; else c.never++;
+  });
+  return c;
+}
 
 function render() {
-  const list = visible();
+  const list = visible().sort((a, b) => (a.is_stress ? 1 : 0) - (b.is_stress ? 1 : 0));
   document.getElementById('count').textContent = `${list.length} of ${S.scripts.length} scripts`;
   const tb = document.getElementById('rows');
-  if (!S.scripts.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">No scripts in the directory yet.</td></tr>'; }
-  else if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">No scripts match these filters.</td></tr>'; }
+  if (!S.scripts.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">No scripts for this site yet.</td></tr>'; }
+  else if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">No scripts match your search.</td></tr>'; }
   else tb.innerHTML = list.map((s) => {
     const r = s.latest_run; const st = rowStatus(s); const running = st === 'running' || st === 'queued';
-    return `<tr data-slug="${esc(s.slug)}" tabindex="0" class="${S.open === s.slug ? 'sel' : ''}${s.enabled === false ? ' off' : ''}">
+    return `<tr data-slug="${esc(s.slug)}" tabindex="0" class="${S.open === s.slug ? 'sel' : ''}${s.enabled === false ? ' off' : ''}${s.is_stress ? ' stress-row' : ''}">
       <td class="c-dot"><span class="dot ${st}" title="${esc(st)}"></span></td>
       <td><div class="s-name">${esc(s.name)}</div><div class="s-slug">${esc(s.slug)}${s.enabled === false ? ' · disabled' : ''}</div></td>
-      <td class="c-prod">${esc(PRODUCT[s.product] || s.product)}</td>
-      <td class="c-layer"><span class="tag">${esc(s.layer)}</span></td>
+      <td class="c-layer"><span class="tag">${esc(s.is_stress ? 'stress' : s.layer)}</span></td>
       <td class="c-when">${r ? esc(ago(r.started_at)) : '<span class="muted">Never</span>'}</td>
       <td class="c-result">${running ? '<span class="spin" aria-hidden="true"></span> Running' : r ? `<span class="res ${st}">${esc(st.toUpperCase())}</span> <span class="muted">${esc((r.summary || '').slice(0, 90))}</span>` : '<span class="muted">No runs yet</span>'}</td>
       <td class="c-dur">${r && !running ? esc(dur(r.duration_ms)) : ''}</td>
@@ -199,19 +184,20 @@ function render() {
 }
 
 function renderHealth() {
-  const prods = S.filters.product ? [S.filters.product] : ['support', 'sales', 'pma'];
-  document.getElementById('health').innerHTML = prods.map((p) => {
-    const c = { pass: 0, fail: 0, warn: 0, never: 0 };
-    S.scripts.filter((s) => s.product === p).forEach((s) => {
-      const st = rowStatus(s);
-      if (st === 'pass') c.pass++; else if (st === 'fail' || st === 'error') c.fail++; else if (st === 'warn') c.warn++; else if (st === 'never') c.never++;
-    });
-    return `<div class="health-row"><span class="h-name">${PRODUCT[p]}</span><span class="h-pass" title="Passing">${c.pass}</span><span class="h-fail" title="Failing">${c.fail}</span><span class="h-warn" title="Warning">${c.warn}</span>${c.never ? `<span class="h-never" title="Never run">${c.never}</span>` : ''}</div>`;
-  }).join('') + '<div class="health-key"><span class="h-pass">pass</span><span class="h-fail">fail</span><span class="h-warn">warn</span><span class="h-never">never</span></div>';
-  const btn = document.getElementById('run-all');
-  btn.disabled = !S.filters.product;
-  btn.textContent = S.filters.product ? `Run all ${PRODUCT[S.filters.product]} scripts` : 'Run all for this product';
-  if (!S.filters.product) document.getElementById('run-all-msg').textContent = 'Pick a product above to run its whole suite.';
+  const c = counts();
+  document.getElementById('health').innerHTML = `<div class="health-row"><span class="h-name">${esc(PRODUCT[S.product] || '')}</span><span class="h-pass" title="Passing">${c.pass}</span><span class="h-fail" title="Failing">${c.fail}</span><span class="h-warn" title="Warning">${c.warn}</span>${c.never ? `<span class="h-never" title="Never run">${c.never}</span>` : ''}</div>`
+    + '<div class="health-key"><span class="h-pass">pass</span><span class="h-fail">fail</span><span class="h-warn">warn</span><span class="h-never">never</span></div>';
+  const stress = S.scripts.find((s) => s.is_stress);
+  const sb = document.getElementById('run-stress');
+  sb.style.display = stress ? '' : 'none';
+  sb.disabled = !stress || rowStatus(stress) === 'running';
+  sb.textContent = stress && rowStatus(stress) === 'running' ? 'Stress test running…' : 'Stress test';
+  // Read-only health of every site, with links to each site's own panel.
+  document.getElementById('overview').innerHTML = ['support', 'sales', 'pma'].map((p) => {
+    const o = S.overview[p] || {}; const here = p === S.product;
+    const label = here ? `<span class="h-name">${PRODUCT[p]} <span class="muted">(this site)</span></span>` : `<a class="h-name" href="${SITE[p]}/admin/testing">${PRODUCT[p]} ↗</a>`;
+    return `<div class="health-row">${label}<span class="h-pass" title="Passing">${o.pass || 0}</span><span class="h-fail" title="Failing">${o.fail || 0}</span><span class="h-warn" title="Warning">${o.warn || 0}</span></div>`;
+  }).join('');
 }
 
 async function runScript(slug, msgEl) {
@@ -220,7 +206,7 @@ async function runScript(slug, msgEl) {
   setMsg('Starting…');
   try {
     const d = await api('/api/ops/run', { method: 'POST', body: { slug } });
-    if (d.state === 'queued') S.pending[s.product] = Date.now();
+    if (d.state === 'queued') S.pending[s.is_stress ? 'stress' : 'backend'] = Date.now();
     setMsg(d.message || 'Running.');
     if (!msgEl) setTimeout(() => banner(''), 4000);
     await loadScripts();
@@ -228,12 +214,11 @@ async function runScript(slug, msgEl) {
 }
 
 async function runAll() {
-  const p = S.filters.product; if (!p) return;
   const msg = document.getElementById('run-all-msg'); const btn = document.getElementById('run-all');
   btn.disabled = true; msg.textContent = 'Starting…';
   try {
-    const d = await api('/api/ops/run-all', { method: 'POST', body: { product: p } });
-    if (d.backend?.state === 'queued') S.pending[p] = Date.now();
+    const d = await api('/api/ops/run-all', { method: 'POST', body: {} });
+    if (d.backend?.state === 'queued') S.pending.backend = Date.now();
     const parts = [];
     if (d.agent.started) parts.push(`${d.agent.started} agent test${d.agent.started > 1 ? 's' : ''} started`);
     if (d.agent.skipped.length) parts.push(`${d.agent.skipped.length} already running`);
@@ -242,7 +227,18 @@ async function runAll() {
     msg.textContent = parts.join('. ') || 'Nothing to run.';
     await loadScripts();
   } catch (err) { msg.textContent = err.message; }
-  finally { btn.disabled = !S.filters.product; }
+  finally { btn.disabled = false; }
+}
+
+async function runStress() {
+  const msg = document.getElementById('run-all-msg');
+  msg.textContent = 'Starting stress test…';
+  try {
+    const d = await api('/api/ops/stress', { method: 'POST', body: {} });
+    S.pending.stress = Date.now();
+    msg.textContent = d.message || 'Stress test started.';
+    await loadScripts();
+  } catch (err) { msg.textContent = err.message; }
 }
 
 // ---------- Drawer ----------
@@ -271,20 +267,21 @@ async function refreshDrawer() {
     const d = await api(`/api/ops/scripts/${encodeURIComponent(slug)}`);
     if (S.open !== slug) return;
     const s = d.script; const r = d.latest_run;
-    const pending = s.layer === 'backend' && S.pending[s.product];
+    const pending = s.is_stress ? !!S.pending.stress : (s.layer === 'backend' && !!S.pending.backend);
     const st = pending ? 'running' : statusOf(r);
     const running = st === 'running' || st === 'queued';
     document.getElementById('d-title').textContent = s.name;
     body.innerHTML = `
-      <div class="meta-row"><span class="tag">${esc(PRODUCT[s.product] || s.product)}</span><span class="tag">${esc(s.layer)}</span>${s.enabled === false ? '<span class="tag warn">disabled</span>' : ''}<span class="muted mono">${esc(s.slug)}</span></div>
+      <div class="meta-row"><span class="tag">${esc(PRODUCT[s.product] || s.product)}</span><span class="tag">${esc(s.is_stress ? 'stress' : s.layer)}</span>${s.enabled === false ? '<span class="tag warn">disabled</span>' : ''}<span class="muted mono">${esc(s.slug)}</span></div>
       ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ''}
       ${s.layer === 'agent' ? OpsAdmin.agentSpec(s) : `<div class="field-row"><span class="field-label">Check key</span><span class="field-val mono">${esc(s.check_key || '—')}</span></div>`}
       <div class="section-sep">Latest result</div>
       ${r || pending ? `
         <div class="result-head"><span class="dot ${st}"></span><span class="res ${st}">${running ? 'RUNNING' : esc(st.toUpperCase())}</span>${running ? '<span class="spin"></span>' : ''}</div>
-        ${r ? OpsAdmin.runDetail(r, s) : '<p class="muted">Backend group queued. Results appear here as they land.</p>'}
+        ${r ? OpsAdmin.runDetail(r, s) : '<p class="muted">Queued. Results appear here as they land.</p>'}
       ` : '<div class="empty-sm">No runs yet.</div>'}
-      ${s.layer === 'backend' ? `<p class="note">Backend scripts run with the rest of the ${esc(PRODUCT[s.product])} backend group so setup and cleanup stay paired.</p>` : ''}
+      ${s.is_stress ? '<p class="note">Sends 25 concurrent synthetic calls to this site, checks the database counts, then deletes every row it created. Runs only when you click it.</p>'
+        : s.layer === 'backend' ? '<p class="note">Backend scripts run together with this site\'s other backend checks so setup and cleanup stay paired.</p>' : ''}
       <div class="drawer-actions">
         <button class="btn-primary" id="d-run" ${running || s.enabled === false ? 'disabled' : ''}>${running ? 'Running…' : 'Run now'}</button>
         <a class="btn-outline" href="/admin/testing/script/${encodeURIComponent(s.slug)}">View history report</a>

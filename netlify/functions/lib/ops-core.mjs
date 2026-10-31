@@ -1,7 +1,8 @@
-// Shared engine for the Simulation Testing admin panel (identical on the PMA and
-// specialist sites). Reads the one script directory (ops_test_scripts), starts
-// ElevenLabs agent tests, hands backend groups to the specialist runner, and
-// settles open runs in ops_test_runs.
+// Shared engine for the Simulation Testing admin panel (identical file on the PMA,
+// Specialist and Sales sites). Each site tests only its own product: siteProduct()
+// comes from OPS_PRODUCT or, by default, the site's own domain. Reads the one script
+// directory (ops_test_scripts), starts ElevenLabs agent tests, hands backend and
+// stress runs to this site's own background functions, and settles open runs.
 //
 // Keys stay server-side: ELEVENLABS_API_KEY and SUPABASE_SERVICE_ROLE_KEY are
 // Netlify env vars only.
@@ -9,8 +10,20 @@
 import { createClient } from '@supabase/supabase-js';
 
 export const PRODUCTS = ['support', 'sales', 'pma'];
+
+// This site's product. OPS_PRODUCT wins; otherwise the site's domain decides.
+const HOST_PRODUCT = [[/(^|\.)pma\./, 'pma'], [/(^|\.)sales\./, 'sales'], [/(^|\.)specialist\./, 'support']];
+export function siteProduct() {
+  const forced = String(process.env.OPS_PRODUCT || '').trim().toLowerCase();
+  if (PRODUCTS.includes(forced)) return forced;
+  const host = String(process.env.URL || '').replace(/^https?:\/\//, '').toLowerCase();
+  const hit = HOST_PRODUCT.find(([re]) => re.test(host));
+  if (!hit) throw new Error(`Cannot tell which product this site is (URL=${host || 'unset'}); set OPS_PRODUCT`);
+  return hit[1];
+}
+const siteBase = () => String(process.env.URL || '').replace(/\/+$/, '');
+const isStressKey = (k) => /\.stress$/.test(String(k || ''));
 const EL_BASE = 'https://api.elevenlabs.io/v1/convai';
-const RUNNER_URL = process.env.OPS_RUNNER_URL || 'https://specialist.stellaruc.com/.netlify/functions/ops-run-background';
 const AGENT_TIMEOUT_MS = 10 * 60 * 1000;   // agent run still open after 10 min -> error
 const BACKEND_TIMEOUT_MS = 16 * 60 * 1000; // background budget is 15 min
 const BACKEND_COOLDOWN_MS = 30 * 1000;
@@ -230,21 +243,44 @@ export async function startAgentRuns(scripts, triggeredBy) {
 
 // Hands one product's backend group to the specialist runner (setup and cleanup
 // stay paired). Returns { state: 'queued'|'cooldown'|'running'|'error', message }.
+// Hands this site's backend group to its own background runner (setup and cleanup stay
+// paired). Returns { state: 'queued'|'cooldown'|'running'|'error', message }.
 export async function startBackendGroup(product, triggeredBy) {
+  if (product !== siteProduct()) return { state: 'error', message: `This site only runs ${siteProduct()} checks.` };
   const sb = db();
+  const { data: rows } = await sb.from('ops_test_scripts').select('id, check_key').eq('layer', 'backend').eq('product', product);
+  const ids = (rows || []).filter((r) => !isStressKey(r.check_key)).map((r) => r.id);
+  if (!ids.length) return { state: 'none', message: 'No backend scripts' };
   const since = new Date(Date.now() - BACKEND_COOLDOWN_MS).toISOString();
-  const { data: recent } = await sb.from('ops_check_runs').select('id').eq('layer', 'backend').gte('started_at', since).limit(1);
+  const { data: recent } = await sb.from('ops_test_runs').select('id').in('script_id', ids).gte('started_at', since).limit(1);
   if (recent?.length) return { state: 'cooldown', message: 'Backend checks just ran. Try again shortly.' };
+  const busy = await openRunScriptIds(ids);
+  if (busy.size) return { state: 'running', message: 'The backend checks are already running.' };
+  return kick('ops-run-background', { trigger: clip(triggeredBy, 100) }, 'Running all backend checks (setup and cleanup stay paired).');
+}
 
-  const { data: scripts } = await sb.from('ops_test_scripts').select('id').eq('layer', 'backend').eq('product', product);
-  const busy = await openRunScriptIds((scripts || []).map((s) => s.id));
-  if (busy.size) return { state: 'running', message: `The ${product} backend group is already running.` };
+// Starts this site's stress test (background function, on demand only).
+export async function startStress(triggeredBy) {
+  const product = siteProduct();
+  const sb = db();
+  const { data: script } = await sb.from('ops_test_scripts').select('id').eq('product', product).eq('check_key', `${product}.stress`).maybeSingle();
+  if (!script) return { state: 'error', message: 'No stress test script for this site.' };
+  const busy = await openRunScriptIds([script.id]);
+  if (busy.size) return { state: 'running', message: 'A stress test is already running.' };
+  const since = new Date(Date.now() - 120 * 1000).toISOString();
+  const { data: recent } = await sb.from('ops_test_runs').select('id').eq('script_id', script.id).gte('started_at', since).limit(1);
+  if (recent?.length) return { state: 'cooldown', message: 'A stress test ran in the last 2 minutes. Try again shortly.' };
+  return kick('ops-stress-background', { trigger: clip(triggeredBy, 100) }, 'Stress test started: 25 concurrent synthetic calls.');
+}
 
+async function kick(fn, body, okMessage) {
+  const base = process.env.OPS_RUNNER_BASE || siteBase();
+  if (!base) return { state: 'error', message: 'Site URL unknown (URL env var unset)' };
   try {
-    const r = await fetchJson(RUNNER_URL, { method: 'POST', body: { trigger: clip(triggeredBy, 100), products: [product] } });
+    const r = await fetchJson(`${base}/.netlify/functions/${fn}`, { method: 'POST', body });
     if (r.status !== 202 && !r.ok) return { state: 'error', message: `Runner replied HTTP ${r.status}` };
   } catch (err) {
     return { state: 'error', message: err?.name === 'AbortError' ? 'Runner did not answer in time' : err.message };
   }
-  return { state: 'queued', message: `Running the whole ${product} backend group (setup and cleanup stay paired).` };
+  return { state: 'queued', message: okMessage };
 }

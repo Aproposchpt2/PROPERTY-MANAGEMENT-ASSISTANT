@@ -47,7 +47,7 @@
 <script>
 const { esc, ago, dur, fmtDate, statusOf, isOpen, trigger, api } = OpsAdmin;
 const slug = decodeURIComponent((location.pathname.match(/\/admin\/testing\/script\/([^/?#]+)/) || [])[1] || new URLSearchParams(location.search).get('slug') || '');
-const PRODUCT = { support: 'Support', sales: 'Sales', pma: 'PMA' };
+const PRODUCT = { support: 'Specialist', sales: 'Sales', pma: 'PMA' };
 let expanded = new Set(); let timer = null; let script = null; let runs = [];
 
 document.getElementById('back').href = '/admin/testing' + (slug ? '?script=' + encodeURIComponent(slug) : '');

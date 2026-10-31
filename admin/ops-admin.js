@@ -175,6 +175,19 @@
     }).join('')}</ul></div>`;
   }
 
+  function stressDetail(r) {
+    const d = r.detail;
+    if (!d || d.kind !== 'stress') return '';
+    const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`;
+    const dbRows = Object.entries(d.db_check || {}).map(([k, v]) => kv(k.replace(/_/g, ' '), v)).join('');
+    return `<div class="field-row"><span class="field-label">Load</span><div class="kv-grid">
+        ${kv('Concurrent calls', d.concurrent_calls)}${kv('Requests', d.requests)}${kv('Errors', d.errors)}${kv('Total time', dur(d.wall_ms))}
+        ${kv('Typical (p50)', dur(d.p50_ms))}${kv('Slow (p95)', dur(d.p95_ms))}${kv('Slowest', dur(d.max_ms))}</div></div>
+      ${dbRows ? `<div class="field-row"><span class="field-label">Database check</span><div class="kv-grid">${dbRows}</div></div>` : ''}
+      ${(d.first_errors || []).length ? `<div class="field-row"><span class="field-label">First errors</span><ul class="conds">${d.first_errors.map((e) => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
+      ${(d.cleanup_errors || []).length ? `<div class="err-box">Cleanup errors: ${esc(d.cleanup_errors.join('; '))}</div>` : ''}`;
+  }
+
   function runDetail(r, s) {
     const extra = r.detail && s?.layer === 'backend' && r.detail.check ? `<div class="kv"><span>Check</span><span>${esc(r.detail.check)}</span></div>` : '';
     return `
@@ -186,6 +199,7 @@
         ${extra}
       </div>
       ${r.summary ? `<div class="field-row"><span class="field-label">Summary</span><span class="field-val pre">${esc(r.summary)}</span></div>` : ''}
+      ${stressDetail(r)}
       ${criteriaList(r)}
       ${r.external_id ? `<p class="muted mono small">ElevenLabs invocation ${esc(r.external_id)}${r.external_run_id ? ` · run ${esc(r.external_run_id)}` : ''}</p>` : ''}`;
   }
