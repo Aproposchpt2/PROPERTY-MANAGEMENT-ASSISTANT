@@ -33,9 +33,13 @@ const OPEN = ['queued', 'running'];
 let _db = null;
 export function db() {
   if (_db) return _db;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_NOT_CONFIGURED');
+  // The project URL is public; a malformed or bare-ID env value falls back to it.
+  const clean = (v) => String(v || '').trim().replace(/^["']|["']$/g, '');
+  const raw = clean(process.env.SUPABASE_URL).replace(/\/+$/, '');
+  const url = /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(raw) ? raw
+    : /^[a-z0-9]{20}$/i.test(raw) ? `https://${raw}.supabase.co` : 'https://vqrqyanqsiqzsmlhytaz.supabase.co';
+  const key = clean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!key) throw new Error('SUPABASE_NOT_CONFIGURED');
   _db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   return _db;
 }
