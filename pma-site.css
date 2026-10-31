@@ -149,3 +149,7 @@
 
 /* Prominent bilingual service capability below corporate brand hero */
 .language-feature{display:flex;justify-content:center;align-items:center;gap:20px;flex-wrap:wrap;background:#15120B;color:#F7F4EC;border-top:1px solid #C8A84B;border-bottom:1px solid #C8A84B;padding:24px 20px;text-align:center}.language-feature strong{color:#E4C878;font:400 clamp(24px,3.5vw,42px)/1.2 'Cormorant Garamond',Georgia,serif;letter-spacing:.08em}.language-feature span{font-size:16px;color:#D3CEC1}.language-inside{font:400 18px/1.5 'DM Sans',sans-serif;color:#E4C878;letter-spacing:.08em;margin-bottom:18px}
+
+/* Elevate the PMA care-center value proposition in the second hero. */
+.hero .hero-care-center{font:400 clamp(35px,4.8vw,65px)/1.12 'Cormorant Garamond',Georgia,serif;color:#E4C878;margin:24px 0}.hero .hero-service-message{font-size:clamp(18px,2vw,24px);line-height:1.75;max-width:940px;color:#F7F4EC;padding-left:23px;border-left:2px solid #C8A84B}.hero .hero-content{max-width:1000px}
+@media(max-width:700px){.hero .hero-service-message{padding-left:16px}}
