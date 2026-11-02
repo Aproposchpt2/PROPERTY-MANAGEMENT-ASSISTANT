@@ -8,7 +8,7 @@
   let session = null;
   let ready = null;
 
-  const SITE = /(^|\.)pma\./.test(location.hostname) ? 'PROPERTY MANAGEMENT ASSISTANT' : 'SPECIALIST';
+  const SITE = /(^|\.)pma\./.test(location.hostname) ? 'PROPERTY MANAGEMENT ASSISTANT' : /(^|\.)ccc\./.test(location.hostname) ? 'CUSTOMER CARE CENTER' : 'SPECIALIST';
 
   const $ = (id) => document.getElementById(id);
   function show(signedIn) {

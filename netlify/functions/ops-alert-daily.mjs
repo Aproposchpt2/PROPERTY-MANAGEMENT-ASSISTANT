@@ -3,7 +3,7 @@
 // Recipient: OPS_ALERT_EMAIL, else OWNER_NOTIFICATION_EMAIL / RESEND_TO_EMAIL / OWNER_EMAIL.
 import { db, listScripts, refreshOpenRuns, siteProduct } from './lib/ops-core.mjs';
 
-const NAMES = { pma: 'Property Management Assistant', support: 'Specialist', sales: 'Sales Specialist' };
+const NAMES = { pma: 'Property Management Assistant', support: 'Specialist', sales: 'Sales Specialist', ccc: 'Customer Care Center' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export default async () => {

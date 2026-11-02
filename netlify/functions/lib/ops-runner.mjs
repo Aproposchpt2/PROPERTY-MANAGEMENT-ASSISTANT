@@ -1,5 +1,5 @@
 // Synthetic checks and stress tests for the Stellar products. Identical file on the PMA,
-// Specialist and Sales sites; each site only ever runs the group for its own product
+// Specialist, Sales and Customer Care Center sites; each site only ever runs the group for its own product
 // (see siteProduct in ops-core.mjs), so every site tests itself.
 //
 // Each check calls a live endpoint the way an ElevenLabs agent would, verifies the
@@ -16,6 +16,7 @@ import { db, siteProduct } from './ops-core.mjs';
 const SPECIALIST = 'https://specialist.stellaruc.com';
 const SALES = 'https://sales.stellaruc.com';
 const PMA = 'https://pma.stellaruc.com';
+const CCC = 'https://ccc.stellaruc.com';
 const LEAD_TENANT_ID = '5885a020-d363-4c27-910a-c035eda132f5';
 const TEST_PHONE = '+10000000000';
 const COOLDOWN_SECS = 30;
@@ -45,6 +46,11 @@ const clean = (v) => String(v || '').trim().replace(/^["']|["']$/g, '');
 // Specialist site's own webhook secret (optional until that site enforces one).
 function intakeHeaders() {
   const secret = clean(process.env.INTAKE_WEBHOOK_SECRET);
+  return secret ? { 'x-intake-secret': secret } : {};
+}
+// Customer Care Center webhook secret (required by that site).
+function cccHeaders() {
+  const secret = clean(process.env.CCC_INTAKE_WEBHOOK_SECRET);
   return secret ? { 'x-intake-secret': secret } : {};
 }
 // Sales webhook secret: SALES_INTAKE_WEBHOOK_SECRET (old name INTAKE_WEBHOOK_SECRET).
@@ -213,6 +219,63 @@ async function salesChecks(sb, tag, results) {
   });
 }
 
+// ---------------- Customer Care Center ----------------
+// ccc.stellaruc.com webhook -> Lead Management pipeline. Synthetic calls skip the owner email.
+async function cccChecks(sb, tag, results) {
+  const intake = `${CCC}/api/ccc/intake`;
+
+  await check(results, 'ccc', 'ccc.site', 'Site is up', async () => {
+    const r = await http(`${CCC}/`, { method: 'GET' });
+    return r.status === 200 ? pass('200 OK') : fail(`HTTP ${r.status}`);
+  });
+
+  // Same request the Customer Care Center agent's start_session tool sends.
+  let interactionId = null;
+  await check(results, 'ccc', 'ccc.start_session', 'start_session opens a call record', async () => {
+    const r = await http(intake, { body: { action: 'start', conversationId: tag, callerPhone: TEST_PHONE }, headers: cccHeaders() });
+    if (r.status !== 200 || !r.json?.interactionId) return fail(`HTTP ${r.status}: the Customer Care Center agent's tools are being rejected (${r.text.slice(0, 120)})`);
+    interactionId = r.json.interactionId;
+    const { data, error } = await sb.from('ai4cc_interactions').select('id').eq('id', interactionId).maybeSingle();
+    if (error) return fail(`DB read failed: ${error.message}`);
+    return data ? pass('Interaction row written') : fail('Endpoint replied but no ai4cc_interactions row found');
+  });
+
+  await check(results, 'ccc', 'ccc.submit_lead', 'submit_lead creates a lead', async () => {
+    if (!interactionId) return fail('Skipped: start_session failed');
+    const r = await http(intake, {
+      body: {
+        action: 'submit', interactionId, callerName: 'Synthetic Check', businessName: 'Synthetic Monitoring',
+        phone: TEST_PHONE, serviceInterest: 'Appointment request - synthetic check', description: 'Automated synthetic check. Safe to ignore; deleted automatically.',
+      },
+      headers: cccHeaders(),
+    });
+    if (r.status !== 200 || !r.json?.ok) return fail(`HTTP ${r.status} ${r.text.slice(0, 160)}`);
+    const { data, error } = await sb.from('ai4cc_leads').select('id').eq('originating_interaction_id', interactionId);
+    if (error) return fail(`DB read failed: ${error.message}`);
+    return data?.length === 1 ? pass('Lead written to Lead Management') : fail(`Expected 1 lead, found ${data?.length ?? 0}`);
+  });
+
+  await check(results, 'ccc', 'ccc.cleanup', 'Cleanup of synthetic rows', async () => {
+    const { data: ints } = await sb.from('ai4cc_interactions').select('id').eq('tenant_id', LEAD_TENANT_ID).eq('external_id', tag);
+    const intIds = (ints || []).map((i) => i.id);
+    if (!intIds.length) return pass('Nothing to remove');
+    const { data: leads } = await sb.from('ai4cc_leads').select('id, contact_id').in('originating_interaction_id', intIds);
+    const leadIds = (leads || []).map((l) => l.id);
+    const contactIds = [...new Set((leads || []).map((l) => l.contact_id))];
+    const errs = [];
+    const del = async (q) => { const { error } = await q; if (error) errs.push(error.message); };
+    if (leadIds.length) {
+      await del(sb.from('ai4cc_audit_logs').delete().in('resource_id', leadIds));
+      await del(sb.from('ai4cc_lead_activities').delete().in('lead_id', leadIds));
+      await del(sb.from('ai4cc_leads').delete().in('id', leadIds));
+    }
+    // Contacts created for synthetic calls only (opaque identifier = this run's tag).
+    if (contactIds.length) await del(sb.from('ai4cc_contacts').delete().in('id', contactIds).eq('metadata->>customerIdentifier', tag));
+    await del(sb.from('ai4cc_interactions').delete().in('id', intIds));
+    return errs.length ? fail(errs.join('; ')) : pass('Synthetic rows removed');
+  });
+}
+
 // ---------------- Property Management Assistant ----------------
 async function pmaChecks(sb, _tag, results) {
   await check(results, 'pma', 'pma.site', 'Site is up', async () => {
@@ -240,7 +303,7 @@ async function pmaChecks(sb, _tag, results) {
 }
 
 // ---------------- Orchestration ----------------
-const GROUPS = { support: supportChecks, sales: salesChecks, pma: pmaChecks };
+const GROUPS = { support: supportChecks, sales: salesChecks, pma: pmaChecks, ccc: cccChecks };
 const isStressKey = (k) => /\.stress$/.test(String(k || ''));
 
 // Backend scripts for a product, excluding its stress test (run separately).
@@ -350,6 +413,42 @@ async function salesStress(sb, run) {
   return { wall_ms: wall, steps, db_check, db_ok: dbOk, cleanup_errors: errs };
 }
 
+async function cccStress(sb, run) {
+  const intake = `${CCC}/api/ccc/intake`;
+  const steps = [];
+  const one = async (i) => {
+    const st = await timed(async () => { const r = await http(intake, { body: { action: 'start', conversationId: `${run}_${i}`, callerPhone: TEST_PHONE }, headers: cccHeaders() }); return { ok: r.status === 200 && !!r.json?.interactionId, id: r.json?.interactionId, error: r.json?.reason || r.json?.error || (r.status !== 200 ? `HTTP ${r.status}` : null) }; });
+    steps.push(st); if (!st.ok) return;
+    const body = { action: 'submit', interactionId: st.id, callerName: `Synthetic ${i}`, businessName: 'Synthetic Load Test', phone: TEST_PHONE, description: 'Automated stress test. Safe to ignore; deleted automatically.' };
+    steps.push(await timed(async () => { const r = await http(intake, { body: { ...body, serviceInterest: 'Appointment request' }, headers: cccHeaders() }); return { ok: r.status === 200 && r.json?.ok === true && r.json?.updated === false, error: r.json?.reason || r.json?.error }; }));
+    steps.push(await timed(async () => { const r = await http(intake, { body: { ...body, serviceInterest: 'Service question' }, headers: cccHeaders() }); return { ok: r.status === 200 && r.json?.ok === true && r.json?.updated === true, error: r.json?.reason || r.json?.error }; }));
+  };
+  const t0 = Date.now();
+  await Promise.all(Array.from({ length: STRESS_CALLS }, (_, i) => one(i)));
+  const wall = Date.now() - t0;
+
+  // Verify: one completed interaction and exactly one lead per call.
+  const { data: ints } = await sb.from('ai4cc_interactions').select('id, status').eq('tenant_id', LEAD_TENANT_ID).like('external_id', `${run}_%`);
+  const intIds = (ints || []).map((x) => x.id);
+  const { data: leads } = intIds.length ? await sb.from('ai4cc_leads').select('id, contact_id, originating_interaction_id').in('originating_interaction_id', intIds) : { data: [] };
+  const db_check = { calls: STRESS_CALLS, interactions: intIds.length, completed: (ints || []).filter((x) => x.status === 'completed').length, leads: leads?.length || 0, duplicate_leads: (leads?.length || 0) - new Set((leads || []).map((l) => l.originating_interaction_id)).size };
+
+  // Cleanup: audit logs, activities, leads, synthetic contacts, interactions.
+  const leadIds = (leads || []).map((l) => l.id);
+  const contactIds = [...new Set((leads || []).map((l) => l.contact_id))];
+  const errs = [];
+  const del = async (q) => { const { error } = await q; if (error) errs.push(error.message); };
+  if (leadIds.length) {
+    await del(sb.from('ai4cc_audit_logs').delete().in('resource_id', leadIds));
+    await del(sb.from('ai4cc_lead_activities').delete().in('lead_id', leadIds));
+    await del(sb.from('ai4cc_leads').delete().in('id', leadIds));
+  }
+  if (contactIds.length) await del(sb.from('ai4cc_contacts').delete().in('id', contactIds).like('metadata->>customerIdentifier', 'synthetic_check_%'));
+  if (intIds.length) await del(sb.from('ai4cc_interactions').delete().in('id', intIds));
+  const dbOk = db_check.interactions === STRESS_CALLS && db_check.completed === STRESS_CALLS && db_check.leads === STRESS_CALLS && db_check.duplicate_leads === 0;
+  return { wall_ms: wall, steps, db_check, db_ok: dbOk, cleanup_errors: errs };
+}
+
 async function supportStress(sb, run) {
   const intake = `${SPECIALIST}/api/intake/webhook`;
   const steps = [];
@@ -397,7 +496,7 @@ async function pmaStress(sb) {
   return { wall_ms: wall, steps, db_check, db_ok: reads.every(([, v]) => v === 'ok'), cleanup_errors: [] };
 }
 
-const STRESS = { sales: salesStress, support: supportStress, pma: pmaStress };
+const STRESS = { sales: salesStress, support: supportStress, pma: pmaStress, ccc: cccStress };
 
 // Runs the stress test for this site's product and records it on the `<product>.stress` script.
 export async function runStress(trigger = 'manual', product = siteProduct()) {

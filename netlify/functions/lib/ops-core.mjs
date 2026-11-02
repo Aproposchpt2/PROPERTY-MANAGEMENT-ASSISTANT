@@ -1,5 +1,5 @@
 // Shared engine for the Simulation Testing admin panel (identical file on the PMA,
-// Specialist and Sales sites). Each site tests only its own product: siteProduct()
+// Specialist, Sales and Customer Care Center sites). Each site tests only its own product: siteProduct()
 // comes from OPS_PRODUCT or, by default, the site's own domain. Reads the one script
 // directory (ops_test_scripts), starts ElevenLabs agent tests, hands backend and
 // stress runs to this site's own background functions, and settles open runs.
@@ -9,10 +9,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-export const PRODUCTS = ['support', 'sales', 'pma'];
+export const PRODUCTS = ['support', 'sales', 'pma', 'ccc'];
 
 // This site's product. OPS_PRODUCT wins; otherwise the site's domain decides.
-const HOST_PRODUCT = [[/(^|\.)pma\./, 'pma'], [/(^|\.)sales\./, 'sales'], [/(^|\.)specialist\./, 'support']];
+const HOST_PRODUCT = [[/(^|\.)pma\./, 'pma'], [/(^|\.)sales\./, 'sales'], [/(^|\.)specialist\./, 'support'], [/(^|\.)ccc\./, 'ccc']];
 export function siteProduct() {
   const forced = String(process.env.OPS_PRODUCT || '').trim().toLowerCase();
   if (PRODUCTS.includes(forced)) return forced;
