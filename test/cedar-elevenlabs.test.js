@@ -25,7 +25,18 @@ require.cache[require.resolve(storePath)] = {
           ? storeOverrides.createIncident(a)
           : { success: true, state: 'CREATED', incident_number: 'INC-1' };
       },
-      recordPreference: async (a) => { calls.push(['recordPreference', a]); return { success: true, state: 'RECORDED' }; },
+      recordPreference: async (a) => {
+        calls.push(['recordPreference', a]);
+        if (storeOverrides.recordPreference) return storeOverrides.recordPreference(a);
+        return { success: true, state: 'RECORDED' };
+      },
+      recordFollowupPreference: async (a) => {
+        calls.push(['recordFollowupPreference', a]);
+        return storeOverrides.recordFollowupPreference
+          ? storeOverrides.recordFollowupPreference(a)
+          : { success: true, state: 'CONFIRMED', requestId: 'req_9', caseNumber: 'PMA-OLD', language: 'es' };
+      },
+      recordFollowupResult: async (a) => { calls.push(['recordFollowupResult', a]); return { success: true }; },
       close: async (a) => { calls.push(['close', a]); return { success: true, state: 'CLOSED' }; },
       claimSms: async (a) => {
         calls.push(['claimSms', a]);
@@ -730,4 +741,95 @@ test('emergency escalation failure does not affect the response returned to Ava'
   delete storeOverrides.createIncident;
   delete process.env.PMA_SMS_ENABLED;
   delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+});
+
+// ---- follow-up call: text or email about a case filed earlier ----------------
+const followupBody = (extra = {}) => ({
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_followup_1',
+  conversation_id: 'conv_followup_1',
+  caller_id: '+17025550100',
+  method: 'sms',
+  destination: '+17025550100',
+  consent: true,
+  case_number: 'PMA-OLD',
+  ...extra,
+});
+const noIncidentOnThisCall = async () => { throw new Error('PMA_RPC_42501'); };
+const parse = (res) => JSON.parse(res.body);
+
+test('follow-up call sends the tenant text and records it, with no staff alert', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, true);
+  assert.equal(res.notificationState, 'SENT');
+  const pref = calls.find((c) => c[0] === 'recordFollowupPreference')[1];
+  assert.equal(pref.caller_number, '+17025550100');
+  assert.equal(pref.case_number, 'PMA-OLD');
+  const sent = calls.find((c) => c[0] === 'sendCaseConfirmation')[1];
+  assert.equal(sent.caseNumber, 'PMA-OLD');
+  assert.equal(sent.language, 'es');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].outcome, 'SENT');
+  assert.equal(calls.some((c) => c[0] === 'sendStaffNotification'), false);
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up call on a case this phone did not file sends nothing', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  storeOverrides.recordFollowupPreference = async () => ({ success: false, state: 'NOT_ELIGIBLE' });
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.state, 'NOT_ELIGIBLE');
+  assert.equal(calls.some((c) => c[0] === 'sendCaseConfirmation'), false);
+  delete storeOverrides.recordPreference;
+  delete storeOverrides.recordFollowupPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up text failure is recorded and reported', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  smsOverrides.sendCaseConfirmation = async () => { throw Object.assign(new Error('x'), { code: 21610 }); };
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, false);
+  assert.equal(res.notificationState, 'OPTED_OUT');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].outcome, 'OPTED_OUT');
+  delete smsOverrides.sendCaseConfirmation;
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up email uses the email sender', async () => {
+  calls.length = 0;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody({ method: 'email', destination: 'tenant@example.com' }), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, true);
+  assert.equal(calls.find((c) => c[0] === 'email_sendCaseConfirmation')[1].to, 'tenant@example.com');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].message_ref, 'RE_test_abc123');
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_EMAIL_ENABLED;
+});
+
+test('a preference failure without a case number still reports UNKNOWN', async () => {
+  calls.length = 0;
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody({ case_number: undefined }), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.state, 'UNKNOWN');
+  assert.equal(calls.some((c) => c[0] === 'recordFollowupPreference'), false);
+  delete storeOverrides.recordPreference;
+});
+
+test('the call that filed the case keeps the normal path even with a case number', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  await post(followupBody(), { 'x-pma-tool-key': KEY });
+  assert.equal(calls.some((c) => c[0] === 'recordFollowupPreference'), false);
+  assert.ok(calls.some((c) => c[0] === 'claimSms'));
+  delete process.env.PMA_SMS_ENABLED;
 });

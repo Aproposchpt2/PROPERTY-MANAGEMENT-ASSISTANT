@@ -46,6 +46,16 @@ function createStore(env = process.env) {
         destination: args.destination,
         consent: args.consent,
       }),
+    recordFollowupPreference: ({ caller_number, case_number, args }) =>
+      rpc('pma_voice_followup_preference_v1', {
+        caller_number,
+        case_number,
+        method: args.method,
+        destination: args.destination,
+        consent: args.consent,
+      }),
+    recordFollowupResult: ({ request_id, message_ref, outcome, error_code }) =>
+      rpc('pma_voice_followup_notify_result_v1', { request_id, message_ref, outcome, error_code }),
     close: ({ session_id, call_sid }) =>
       rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id: call_sid }),
     claimSms: ({ session_id, call_sid }) =>
