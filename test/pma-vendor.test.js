@@ -276,6 +276,89 @@ test('confirmed window rewrites tenant update to match schedule', async () => {
   clearStubs();
 });
 
+// ---- vendor job text --------------------------------------------------------
+const JOB = {
+  caseNumber: 'PMA-TEST', summary: 'Sink leak', priority: 'emergency', unit: '644',
+  serviceAddress: '100 Test St', scheduledStart: '2026-11-03T23:00:00+00:00', scheduledEnd: '2026-11-04T00:30:00+00:00',
+};
+
+async function runVendor(body, rpcResults, smsImpl) {
+  clearStubs();
+  const texts = [];
+  stubSupabase(async (name) => {
+    if (name === 'pma_vendor_lookup_v1') return makeRpcResult({ success: true, vendorId: 'v1', companyName: 'ABC' });
+    return makeRpcResult(rpcResults[name]);
+  });
+  stubSms();
+  const smsPath = require.resolve('../netlify/functions/lib/pma-sms');
+  require.cache[smsPath].exports.sendVendorSms = async (m) => { texts.push(m); return smsImpl ? smsImpl(m) : { sid: 'SMS_SID' }; };
+  const savedEnv = Object.assign({}, process.env);
+  Object.assign(process.env, stubEnv);
+  const res = await require('../netlify/functions/pma-vendor').handler(makeEvent({ body: JSON.stringify({ caller_phone: '+17025550001', ...body }) }));
+  Object.assign(process.env, savedEnv);
+  clearStubs();
+  return { status: res.statusCode, data: JSON.parse(res.body), texts };
+}
+
+test('accept texts the job details to the vendor who called', async () => {
+  const { data, texts } = await runVendor({ action: 'accept', case_number: 'PMA-TEST' }, {
+    pma_vendor_accept_v1: { success: true, caseNumber: 'PMA-TEST' },
+    pma_vendor_work_orders_v1: { success: true, workOrders: [JOB] },
+  });
+  assert.equal(data.jobTextSent, true);
+  assert.equal(texts.length, 1);
+  assert.equal(texts[0].to, '+17025550001');
+  for (const part of ['PMA-TEST', 'EMERGENCY', '100 Test St', 'Unit: 644', 'Sink leak', 'Tuesday, November 3', '3 PM', '4:30 PM']) {
+    assert.ok(texts[0].body.includes(part), part);
+  }
+});
+
+test('repeat accept reports already accepted and sends no text', async () => {
+  const { data, texts } = await runVendor({ action: 'accept', case_number: 'PMA-TEST' }, {
+    pma_vendor_accept_v1: { success: true, alreadyAccepted: true, caseNumber: 'PMA-TEST' },
+  });
+  assert.equal(data.success, true);
+  assert.equal(data.alreadyAccepted, true);
+  assert.equal(texts.length, 0);
+});
+
+test('accept stays successful when the text fails', async () => {
+  const { status, data } = await runVendor({ action: 'accept', case_number: 'PMA-TEST' }, {
+    pma_vendor_accept_v1: { success: true, caseNumber: 'PMA-TEST' },
+    pma_vendor_work_orders_v1: { success: true, workOrders: [JOB] },
+  }, () => { throw new Error('boom'); });
+  assert.equal(status, 200);
+  assert.equal(data.success, true);
+  assert.equal(data.jobTextSent, false);
+});
+
+test('failed accept sends no text', async () => {
+  const { data, texts } = await runVendor({ action: 'accept', case_number: 'PMA-TEST' }, {
+    pma_vendor_accept_v1: { success: false, state: 'NOT_FOUND' },
+  });
+  assert.equal(data.state, 'NOT_FOUND');
+  assert.equal(texts.length, 0);
+});
+
+test('send_job_details resends in Spanish and handles unknown jobs and failed sends', async () => {
+  const sent = await runVendor({ action: 'send_job_details', case_number: 'PMA-TEST', language: 'es' }, {
+    pma_vendor_work_orders_v1: { success: true, workOrders: [{ ...JOB, scheduledStart: null, scheduledEnd: null, serviceAddress: null }] },
+  });
+  assert.deepEqual(sent.data, { success: true, caseNumber: 'PMA-TEST', textSent: true });
+  for (const part of ['Unidad: 644', 'Sin programar', 'llame a la oficina']) assert.ok(sent.texts[0].body.includes(part), part);
+
+  const missing = await runVendor({ action: 'send_job_details', case_number: 'PMA-NOPE' }, {
+    pma_vendor_work_orders_v1: { success: true, workOrders: [] },
+  });
+  assert.equal(missing.data.state, 'NOT_FOUND');
+  assert.equal(missing.texts.length, 0);
+
+  const failed = await runVendor({ action: 'send_job_details', case_number: 'PMA-TEST' }, {
+    pma_vendor_work_orders_v1: { success: true, workOrders: [JOB] },
+  }, () => undefined);
+  assert.equal(failed.data.state, 'TEXT_FAILED');
+});
+
 test('unknown action returns 400', async () => {
   clearStubs();
   stubSupabase(async (name) => {
