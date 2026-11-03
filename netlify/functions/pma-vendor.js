@@ -78,6 +78,32 @@ function speakTimes(order, tz = PROPERTY_TZ) {
 // "9:00 AM" -> "9 AM", "3:30 PM" stays; avoids TTS reading "nine zero zero".
 function spokenTime(t) { return String(t).replace(/:00(?=\s?[AaPp]\.?[Mm])/, '').replace(/:00(?=\s?[ap]\.\s?m\.)/, ''); }
 
+// Job details for the vendor's phone. No tenant name or phone number.
+function vendorJobText(order, language) {
+  const es = language === 'es';
+  const visit = order.scheduledDayLocal
+    ? `${order.scheduledDayLocal}, ${order.scheduledStartLocal}${order.scheduledEndLocal ? ` - ${order.scheduledEndLocal}` : ''}`
+    : (es ? 'Sin programar' : 'Not scheduled yet');
+  return [
+    `Desert Ridge ${es ? 'trabajo' : 'job'} ${order.caseNumber}`,
+    ...(order.priority === 'emergency' ? [es ? 'EMERGENCIA' : 'EMERGENCY'] : []),
+    `${es ? 'Dirección' : 'Address'}: ${order.serviceAddress || (es ? 'llame a la oficina' : 'call the office')}`,
+    ...(order.unit ? [`${es ? 'Unidad' : 'Unit'}: ${order.unit}`] : []),
+    `${es ? 'Problema' : 'Problem'}: ${String(order.summary || '').slice(0, 200)}`,
+    `${es ? 'Visita' : 'Visit'}: ${visit}`,
+    es ? 'Responda STOP para cancelar.' : 'Reply STOP to opt out.',
+  ].join('\n');
+}
+
+// Only ever texts the verified vendor's own number. Returns SENT, NOT_FOUND or FAILED.
+async function textJobDetails({ rpc, vendorId, to, caseNumber, language, env }) {
+  const data = await rpc('pma_vendor_work_orders_v1', { vendor_id: vendorId, case_number: caseNumber });
+  const order = data && Array.isArray(data.workOrders) ? data.workOrders[0] : null;
+  if (!order) return 'NOT_FOUND';
+  const sent = await sendVendorSms({ to, body: vendorJobText(speakTimes(order), language), env });
+  return sent ? 'SENT' : 'FAILED';
+}
+
 exports.handler = async function handler(event) {
   const env = process.env;
   if (event.httpMethod !== 'POST') return json(405, { error: 'POST only' });
@@ -116,7 +142,24 @@ exports.handler = async function handler(event) {
     if (action === 'accept') {
       if (!body.case_number) return json(400, { error: 'case_number required' });
       const data = await rpc('pma_vendor_accept_v1', { vendor_id: vendorId, case_number: body.case_number });
+      // The job is accepted whatever happens to the text, so a text failure never fails this.
+      if (data && data.success && !data.alreadyAccepted) {
+        let textState = 'FAILED';
+        try {
+          textState = await textJobDetails({ rpc, vendorId, to: callerPhone, caseNumber: body.case_number, language: body.language, env });
+        } catch (e) {
+          console.error(JSON.stringify({ event: 'pma_job_text_failed', error: e && e.message }));
+        }
+        data.jobTextSent = textState === 'SENT';
+      }
       return json(200, data);
+    }
+
+    if (action === 'send_job_details') {
+      if (!body.case_number) return json(400, { error: 'case_number required' });
+      const textState = await textJobDetails({ rpc, vendorId, to: callerPhone, caseNumber: body.case_number, language: body.language, env });
+      if (textState === 'SENT') return json(200, { success: true, caseNumber: body.case_number, textSent: true });
+      return json(200, { success: false, state: textState === 'NOT_FOUND' ? 'NOT_FOUND' : 'TEXT_FAILED' });
     }
 
     if (action === 'decline') {
