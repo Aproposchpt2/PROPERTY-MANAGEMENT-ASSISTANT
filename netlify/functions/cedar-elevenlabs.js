@@ -107,6 +107,37 @@ async function issuePortalLink(store, requestId, env) {
   }
 }
 
+// Return caller asking for a text or email about a case filed earlier from the same phone.
+// Sends the tenant confirmation only: staff were already told when the case was filed.
+async function followupContact({ store, callerNumber, caseNumber, args, env }) {
+  const channels = { sms: ['./lib/pma-sms', env.PMA_SMS_ENABLED], email: ['./lib/pma-email', env.PMA_EMAIL_ENABLED] };
+  const channel = channels[args.method];
+  if (channel && channel[1] !== 'true') return { success: true, notificationSent: false, notificationState: 'DISABLED' };
+  const result = await store.recordFollowupPreference({ caller_number: callerNumber, case_number: caseNumber, args });
+  if (!result || !result.success) return result || { success: false, state: 'UNKNOWN' };
+  if (!channel) return result;
+
+  let outcome = 'FAILED';
+  let messageRef = null;
+  let errorCode = null;
+  try {
+    const portalLink = await issuePortalLink(store, result.requestId, env);
+    const sent = await require(channel[0]).sendCaseConfirmation({ to: args.destination, caseNumber: result.caseNumber, language: result.language, portalLink, env });
+    outcome = 'SENT';
+    messageRef = sent.sid || sent.id || null;
+  } catch (sendErr) {
+    if (sendErr.code === 21610 || sendErr.twilioCode === 21610) outcome = 'OPTED_OUT';
+    errorCode = String(sendErr.code || '');
+    console.error(JSON.stringify({ event: 'cedar_followup_send_failed', method: args.method, code: errorCode }));
+  }
+  try {
+    await store.recordFollowupResult({ request_id: result.requestId, message_ref: messageRef, outcome, error_code: errorCode });
+  } catch (recErr) {
+    console.error(JSON.stringify({ event: 'cedar_followup_record_failed', error: recErr?.message }));
+  }
+  return { ...result, notificationSent: outcome === 'SENT', notificationState: outcome };
+}
+
 // E.164 pattern required by pma_voice_session_start_v1.
 const E164_RE = /^\+[1-9][0-9]{7,14}$/;
 // Printable ASCII pattern required for call_sid.
@@ -242,7 +273,14 @@ exports.handler = async function handler(event) {
         destination: parameters.destination,
         consent: parameters.consent,
       };
-      const result = await store.recordPreference({ session_id, call_sid, args });
+      let result;
+      try {
+        result = await store.recordPreference({ session_id, call_sid, args });
+      } catch (prefErr) {
+        // 42501 means this call has no incident of its own. A return caller names their case.
+        if (prefErr?.message !== 'PMA_RPC_42501' || !parameters.case_number) throw prefErr;
+        return respond(await followupContact({ store, callerNumber: caller_number_raw, caseNumber: parameters.case_number, args, env }));
+      }
       if (!result || !result.success) {
         return respond(result || { success: false, state: 'UNKNOWN' });
       }
