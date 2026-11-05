@@ -4,7 +4,7 @@
 //
 //   GET  /api/ops/trace/status                 which data sources this site can reach
 //   GET  /api/ops/trace/calls?cursor=          recent calls on the PMA line (ElevenLabs)
-//   GET  /api/ops/trace/calls/:conversation_id  one call: Twilio, menu, ElevenLabs, function trace, Supabase
+//   GET  /api/ops/trace/calls/:conversation_id  one call: Twilio, menu, ElevenLabs, function trace, Supabase, text messages
 //   GET  /api/ops/trace/drills                 fault catalog, active and recent drills
 //   POST /api/ops/trace/drills                 arm {fault_key|'mystery', tool_scope, caller_number, minutes, blind}
 //   POST /api/ops/trace/drills/:id/reveal      show the answer for a drill
@@ -128,6 +128,34 @@ async function twilioFor(callSid) {
   };
 }
 
+// Text messages for a call: SIDs saved on the request rows, plus anything the
+// account sent from the call's start until 15 minutes after it ended.
+const SM_RE = /\b(SM|MM)[0-9a-f]{32}\b/gi;
+async function messagesFor({ requestRows, startUnix, endUnix, caller }) {
+  const auth = twilioAuth();
+  if (!auth) return { error: 'Twilio credentials are not set on this site' };
+  const saved = [...new Set((JSON.stringify(requestRows || []).match(SM_RE) || []))];
+  const base = `https://api.twilio.com/2010-04-01/Accounts/${auth.sid}/Messages`;
+  const day = new Date(startUnix * 1000).toISOString().slice(0, 10);
+  const [list, ...direct] = await Promise.all([
+    getJson(`${base}.json?DateSent=${day}&PageSize=100`, auth.header),
+    ...saved.map((sid) => getJson(`${base}/${sid}.json`, auth.header)),
+  ]);
+  const from = startUnix * 1000; const to = (endUnix + 15 * 60) * 1000;
+  const byId = new Map();
+  for (const r of direct) if (r.data?.sid) byId.set(r.data.sid, r.data);
+  for (const m of list.data?.messages || []) {
+    const t = Date.parse(m.date_created);
+    if (m.direction !== 'inbound' && t >= from && t <= to && !byId.has(m.sid)) byId.set(m.sid, m);
+  }
+  const out = [...byId.values()].map((m) => ({
+    sid: m.sid, to: m.to, from: m.from, status: m.status, error_code: m.error_code, error_message: m.error_message,
+    direction: m.direction, num_segments: m.num_segments, price: m.price, date_created: m.date_created, date_sent: m.date_sent, date_updated: m.date_updated,
+    saved_on_case: saved.includes(m.sid), to_caller: Boolean(caller) && m.to === caller,
+  })).sort((a, b) => Date.parse(a.date_created) - Date.parse(b.date_created));
+  return { data: out, list_error: list.error || null };
+}
+
 async function rows(table, filter, { order = 'created_at', select = '*', limit = 50 } = {}) {
   try {
     let q = db().from(table).select(select);
@@ -155,9 +183,13 @@ async function traceCall(convId) {
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
   const reqIds = (sessions.data || []).map((s) => s.request_id).filter(Boolean);
   const requests = reqIds.length ? await rows('pma_maintenance_requests', { id: reqIds }) : { data: [] };
+  const sms = el.started_at ? await messagesFor({
+    requestRows: requests.data, startUnix: el.started_at, endUnix: el.started_at + (el.duration_secs || 0), caller: el.phone_call?.external_number,
+  }) : { data: [] };
   return {
     elevenlabs: el,
     twilio,
+    sms,
     language_menu: menu,
     function_trace: fnTrace.error && fnByConv.error ? { error: fnTrace.error } : { data: traceRows },
     supabase: { pma_voice_sessions: sessions, pma_maintenance_requests: requests, pma_call_log: callLog },

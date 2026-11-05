@@ -91,6 +91,11 @@
     const dbErr = db.pma_voice_sessions.error || db.pma_maintenance_requests.error;
     H.push(['5 · Supabase', 'Database rows', dbErr ? 'na' : created && !reqRows.length ? 'bad' : (db.pma_voice_sessions.data || []).length ? 'ok' : results.length ? 'warn' : 'na',
       dbErr ? dbErr : `${(db.pma_voice_sessions.data || []).length} session, ${reqRows.length} request, ${(db.pma_call_log.data || []).length} call log`]);
+    const sms = d.sms || {}; const msgs = sms.data || [];
+    const failed = msgs.filter((m) => ['undelivered', 'failed'].includes(m.status));
+    const pending = msgs.filter((m) => !['delivered', 'undelivered', 'failed', 'received', 'read'].includes(m.status));
+    H.push(['6 · Text delivery', 'Twilio messages', sms.error ? 'na' : !msgs.length ? 'na' : failed.length ? 'bad' : pending.length ? 'warn' : 'ok',
+      sms.error ? sms.error : !msgs.length ? 'No texts on this call' : failed.length ? `${failed.length} of ${msgs.length} not delivered` : pending.length ? `${pending.length} of ${msgs.length} not confirmed (${pending[0].status})` : `${msgs.length} delivered`]);
     return H;
   }
 
@@ -127,6 +132,13 @@
     });
     (d.supabase.pma_maintenance_requests.data || []).forEach((q) => add(Date.parse(q.created_at), 'db', 'SUPABASE', `pma_maintenance_requests row ${q.case_number || ''} (status ${q.status || '?'})`));
     (d.supabase.pma_call_log.data || []).forEach((l) => add(Date.parse(l.created_at), 'db', 'SUPABASE', `pma_call_log row written by the post-call webhook (${l.call_duration_secs} s)`));
+    (d.sms?.data || []).forEach((m) => {
+      const who = m.to_caller ? 'the caller' : m.to;
+      add(Date.parse(m.date_created), 'twilio ok', 'TWILIO SMS', `Text accepted (HTTP 201), Message SID ${m.sid} → ${who}`, m.saved_on_case ? 'This SID is saved on the maintenance request.' : '');
+      const bad = ['undelivered', 'failed'].includes(m.status); const done = m.status === 'delivered';
+      add(Date.parse(m.date_updated || m.date_sent || m.date_created) + 1, `twilio ${bad ? 'bad' : done ? 'ok' : 'warn'}`, 'TWILIO SMS',
+        `Text to ${who} is now "${m.status}"${m.error_code ? `, error ${m.error_code}` : ''}`, m.error_message || (done ? 'The carrier confirmed delivery to the handset.' : bad ? '' : 'Accepted or sent, but delivery is not confirmed.'));
+    });
     E.sort((a, b) => a.ms - b.ms);
     return `<ul class="tl">${E.map((e) => `<li class="ev ${e.cls}"><span class="at">${mmss(e.ms - t0)}</span><span class="src">${e.src}</span><span class="what">${esc(e.what)}</span>${e.more ? `<div class="more">${esc(e.more)}</div>` : ''}</li>`).join('')}</ul>`;
   }
@@ -151,7 +163,10 @@
         ${d.function_trace.error ? `<div class="err-box">${esc(d.function_trace.error)}</div>` : (d.function_trace.data || []).length ? raw('ops_call_trace rows', d.function_trace.data) : '<p class="muted small">No function trace rows. Calls before the lab went live have none.</p>'}</div>
       <div class="field-row"><span class="field-label">5 · Supabase</span>
         <p class="where">Supabase → Stellar project → Table Editor → pma_voice_sessions (filter call_sid), pma_maintenance_requests (by request_id), pma_call_log (by conversation_id). Database errors: Logs → Postgres and API.</p>
-        ${raw('pma_voice_sessions', d.supabase.pma_voice_sessions)}${raw('pma_maintenance_requests', d.supabase.pma_maintenance_requests)}${raw('pma_call_log', d.supabase.pma_call_log)}</div>`;
+        ${raw('pma_voice_sessions', d.supabase.pma_voice_sessions)}${raw('pma_maintenance_requests', d.supabase.pma_maintenance_requests)}${raw('pma_call_log', d.supabase.pma_call_log)}</div>
+      <div class="field-row"><span class="field-label">6 · Text delivery (Twilio Messaging)</span>
+        <p class="where">Twilio Console → Monitor → Logs → Messaging → search the Message SID (starts with SM). The status there changes over time: accepted → queued → sent → delivered, or undelivered / failed with an error code.</p>
+        ${d.sms?.error ? `<div class="err-box">${esc(d.sms.error)}</div>` : raw('Twilio Message resources for this call', d.sms?.data || [])}</div>`;
   }
 
   async function openCall(id) {
@@ -235,20 +250,24 @@
 
   function setTab() {
     $('tab-calls').classList.toggle('on', S.view === 'calls');
+    $('tab-lessons').classList.toggle('on', S.view === 'lessons');
     $('tab-drills').classList.toggle('on', S.view === 'drills');
   }
+  const showLessons = (id) => { S.view = 'lessons'; setTab(); window.Lessons.render($('main'), { api, openCall, lessonId: id }); };
 
   function ready() {
     const rib = $('ribbon-site'); if (rib) rib.textContent = 'PROPERTY MANAGEMENT ASSISTANT · CALL TRACE LAB';
     $('tab-calls').onclick = () => { S.view = 'calls'; setTab(); if (S.open) openCall(S.open); };
     $('tab-drills').onclick = () => { S.view = 'drills'; setTab(); renderDrills(); };
-    $('refresh').onclick = () => { loadStatus(); loadCalls(false); if (S.view === 'drills') renderDrills(); else if (S.open) openCall(S.open); };
+    $('tab-lessons').onclick = () => showLessons();
+    $('refresh').onclick = () => { loadStatus(); loadCalls(false); if (S.view === 'drills') renderDrills(); else if (S.view === 'lessons') showLessons(); else if (S.open) openCall(S.open); };
     let practice = false; try { practice = localStorage.getItem('lab_practice') === '1'; } catch { /* ignore */ }
     $('practice').checked = practice; document.body.classList.toggle('practice', practice);
     $('practice').onchange = (e) => { document.body.classList.toggle('practice', e.target.checked); try { localStorage.setItem('lab_practice', e.target.checked ? '1' : '0'); } catch { /* ignore */ } };
     loadStatus(); loadCalls(false);
-    const q = new URLSearchParams(location.search).get('call');
-    if (q) openCall(q);
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('call')) openCall(qs.get('call'));
+    else if (qs.has('lesson')) showLessons(qs.get('lesson') || undefined);
   }
 
   boot({ onReady: ready });
