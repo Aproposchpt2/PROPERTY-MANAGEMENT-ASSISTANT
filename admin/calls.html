@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Call Trace Lab | Stellar Intelligent Software Developers</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&family=Syncopate&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/admin/ops-admin.css">
+<style>
+.lab{display:grid;grid-template-columns:330px 1fr;min-height:calc(100vh - 32px)}
+.lab-left{border-right:1px solid var(--line);background:#0b0b0b;display:flex;flex-direction:column;min-width:0}
+.lab-left-top{padding:18px 18px 10px;border-bottom:1px solid var(--line)}
+.lab-left-top h1{font:500 28px/1.1 'Cormorant Garamond',serif;margin:0 0 10px;color:var(--ivory)}
+.lab-tabs{display:flex;gap:6px;margin-top:10px}
+.lab-tabs button.on{border-color:var(--gold);color:var(--light)}
+.call-list{overflow-y:auto;flex:1}
+.call{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid rgba(200,168,75,.12);padding:11px 18px;color:var(--body);cursor:pointer;font:400 13px 'DM Sans',sans-serif}
+.call:hover,.call.on{background:#151515}
+.call b{color:var(--ivory);font-weight:500}
+.call .sub{font-size:11px;color:var(--muted);margin-top:3px}
+.flags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.flag{font-size:10px;padding:1px 6px;border:1px solid rgba(252,129,129,.45);color:var(--fail)}
+.flag.w{border-color:rgba(212,168,0,.45);color:var(--warn)}
+.flag.ok{border-color:rgba(104,211,145,.45);color:var(--pass)}
+.lab-left-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.lab-main{min-width:0;padding:22px 26px 60px;overflow-x:hidden}
+.path{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:14px 0 22px}
+.hop{border:1px solid var(--line);padding:10px 12px;background:#101010;min-width:0}
+.hop .n{font:400 9px 'Syncopate',sans-serif;letter-spacing:.06em;color:var(--muted)}
+.hop .t{color:var(--ivory);font-size:14px;margin:4px 0 2px}
+.hop .s{font-size:12px}
+.hop.ok{border-color:rgba(104,211,145,.5)}.hop.ok .s{color:var(--pass)}
+.hop.bad{border-color:rgba(252,129,129,.6)}.hop.bad .s{color:var(--fail)}
+.hop.warn{border-color:rgba(212,168,0,.55)}.hop.warn .s{color:var(--warn)}
+.hop.na .s{color:var(--muted)}
+.tl{border-left:2px solid var(--line);margin:0 0 0 8px;padding:0}
+.ev{position:relative;padding:8px 0 10px 18px;list-style:none;font-size:13px}
+.ev:before{content:'';position:absolute;left:-6px;top:13px;width:10px;height:10px;border-radius:50%;background:#555}
+.ev.twilio:before{background:#f22f46}.ev.menu:before{background:#9f7aea}.ev.el:before{background:#63b3ed}.ev.fn:before{background:#00c7b7}.ev.db:before{background:#3ecf8e}
+.ev.bad .what{color:var(--fail)}.ev.warn .what{color:var(--warn)}
+.ev .at{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--muted);display:inline-block;min-width:62px}
+.ev .src{font:400 9px 'Syncopate',sans-serif;letter-spacing:.05em;color:var(--muted);margin-right:6px}
+.ev .what{color:var(--ivory)}
+.ev .more{color:var(--body);font-size:12px;margin:3px 0 0 66px;word-break:break-word}
+.ev.say .what{color:var(--body);font-style:italic}
+details.raw{margin:8px 0;border:1px solid rgba(200,168,75,.18);background:#0e0e0e}
+details.raw summary{cursor:pointer;padding:8px 12px;font-size:12px;color:var(--light)}
+details.raw pre{margin:0;padding:10px 12px;max-height:420px;overflow:auto;font:400 11px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--body);white-space:pre-wrap;word-break:break-word}
+.where{font-size:12px;color:var(--muted);margin:2px 0 10px}
+.err-box{border:1px solid rgba(252,129,129,.5);color:var(--fail);padding:10px 12px;font-size:13px;margin:10px 0}
+.ok-box{border:1px solid rgba(104,211,145,.45);color:var(--pass);padding:10px 12px;font-size:13px;margin:10px 0}
+.drill-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;margin:10px 0 18px}
+.drill-form select,.drill-form input{width:100%}
+select.field-input{appearance:auto}
+.drill{border:1px solid var(--line);padding:12px 14px;margin-bottom:10px;background:#101010}
+.drill h3{margin:0 0 6px;font:500 15px 'DM Sans',sans-serif;color:var(--ivory)}
+.answer{margin-top:10px;font-size:13px;color:var(--body)}
+.answer div{margin-bottom:6px}.answer b{color:var(--light);font-weight:500}
+.toggle{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+body.practice .flags,body.practice .hop .s,body.practice .ev.bad .what,body.practice .ev.warn .what{color:inherit;border-color:var(--line)}
+body.practice .flags{display:none}
+body.practice .hop{border-color:var(--line)!important}
+@media (max-width:900px){.lab{grid-template-columns:1fr}.lab-left{max-height:46vh}.path{grid-template-columns:1fr 1fr}.drill-form{grid-template-columns:1fr 1fr}.lab-main{padding:16px}}
+</style>
+</head>
+<body class="ops-app">
+<div class="ribbon"><span>STELLAR INTELLIGENT SOFTWARE DEVELOPERS</span><span id="ribbon-site">CALL TRACE LAB · ADMIN</span></div>
+
+<div id="login-screen" style="display:none">
+  <div class="login-wrap"><div class="login-card">
+    <h1>Call Trace Lab</h1>
+    <p>Enter your email to receive a sign-in code.</p>
+    <input class="field-input" id="login-email" type="email" autocomplete="email" placeholder="you@example.com" style="margin-bottom:12px">
+    <button class="btn-primary" style="width:100%" id="send-code">Send Sign-In Code</button>
+    <div id="code-step" style="display:none;margin-top:16px">
+      <input class="field-input" id="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Code from your email" style="margin-bottom:12px">
+      <button class="btn-primary" style="width:100%" id="verify-code">Sign In</button>
+    </div>
+    <p class="login-msg" id="login-msg" role="status"></p>
+  </div></div>
+</div>
+
+<div id="app" class="lab" style="display:none">
+  <aside class="lab-left" aria-label="Calls">
+    <div class="lab-left-top">
+      <h1>Call Trace Lab</h1>
+      <div class="muted small" id="sources">Checking data sources…</div>
+      <div class="lab-tabs">
+        <button class="btn-sm on" id="tab-calls">Calls</button>
+        <button class="btn-sm" id="tab-drills">Fault drills</button>
+        <button class="btn-sm" id="refresh">Refresh</button>
+      </div>
+      <label class="toggle" style="margin-top:10px"><input type="checkbox" id="practice"> Practice mode (hide the red and amber hints)</label>
+    </div>
+    <div class="call-list" id="calls"><p class="muted" style="padding:18px">Loading…</p></div>
+    <div class="lab-left-foot">
+      <span id="user-email"></span>
+      <a class="btn-sm" href="/admin/testing">Testing</a>
+      <button class="btn-sm" id="sign-out">Sign out</button>
+    </div>
+  </aside>
+  <main class="lab-main" id="main">
+    <h2 style="font:500 26px 'Cormorant Garamond',serif;margin:0 0 8px;color:var(--ivory)">Pick a call</h2>
+    <p class="desc">Each call is traced through every system it touched: Twilio (the phone line), the language menu on stellaruc.com, Ava in ElevenLabs, the PMA tool function on Netlify, and the Supabase database. Start with a call that went well so you know what normal looks like.</p>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.47.10/dist/umd/supabase.min.js"></script>
+<script src="/admin/ops-admin.js"></script>
+<script src="/admin/calls.js"></script>
+</body></html>

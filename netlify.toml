@@ -22,6 +22,9 @@
   [functions."ops-admin-api"]
     timeout = 26
 
+  [functions."ops-trace-api"]
+    timeout = 26
+
 [[redirects]]
   from = "/api/intake"
   to = "/.netlify/functions/pma-intake"
@@ -119,6 +122,18 @@
   for = "/command-center/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
+
+[[redirects]]
+  from = "/api/ops/trace/*"
+  to = "/.netlify/functions/ops-trace-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin/testing/calls"
+  to = "/admin/calls.html"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/api/ops/*"

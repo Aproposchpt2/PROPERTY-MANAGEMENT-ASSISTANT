@@ -162,7 +162,8 @@ function withSpokenWindow(r) {
 // "9:00 AM" -> "9 AM", "3:30 PM" stays; avoids TTS reading "nine zero zero".
 function spokenTime(t) { return String(t).replace(/:00(?=\s?[AaPp]\.?[Mm])/, '').replace(/:00(?=\s?[ap]\.\s?m\.)/, ''); }
 
-exports.handler = async function handler(event) {
+// ctx.error carries the real failure reason to the Call Trace Lab (lib/call-trace.js).
+async function handle(event, ctx = {}) {
   const env = process.env;
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'POST only' }) };
@@ -182,6 +183,7 @@ exports.handler = async function handler(event) {
     try {
       payload = verifyElevenLabs(rawBody, headers['elevenlabs-signature'], env.ELEVENLABS_WEBHOOK_SECRET);
     } catch {
+      ctx.error = 'AUTH_FAILED: tool key and signature both invalid';
       console.error(JSON.stringify({ event: 'cedar_elevenlabs_auth_failed', has_tool_key: Boolean(headers['x-pma-tool-key']), has_signature: Boolean(headers['elevenlabs-signature']) }));
       return { statusCode: 401, headers: { 'cache-control': 'private, no-store' }, body: JSON.stringify({ error: 'Unauthorized' }) };
     }
@@ -210,7 +212,8 @@ exports.handler = async function handler(event) {
   let store;
   try {
     store = createStore(env);
-  } catch {
+  } catch (err) {
+    ctx.error = err?.message || 'STORE_INIT_FAILED';
     return fail('DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
   }
 
@@ -221,7 +224,8 @@ exports.handler = async function handler(event) {
     try {
       const binding = await store.start({ call_sid, caller_number });
       session_id = binding.session_id;
-    } catch {
+    } catch (err) {
+      ctx.error = `session_start: ${err?.message || 'FAILED'}`;
       return fail('DATABASE_UNAVAILABLE', 'The operation was not confirmed. Do not invent success or a number.');
     }
   }
@@ -379,7 +383,11 @@ exports.handler = async function handler(event) {
     }
     return fail('UNSUPPORTED_TOOL');
   } catch (err) {
+    ctx.error = `${tool_name}: ${err?.message || 'FAILED'}`;
     console.error(JSON.stringify({ event: 'cedar_elevenlabs_tool_failed', tool: tool_name, error: err?.message }));
     return fail('UNKNOWN', 'The operation was not confirmed. Do not invent success or a number.');
   }
-};
+}
+
+exports.handle = handle;
+exports.handler = require('./lib/call-trace').traced(handle);
