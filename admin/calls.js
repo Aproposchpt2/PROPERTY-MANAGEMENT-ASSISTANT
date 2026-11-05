@@ -100,7 +100,7 @@
     const tw = d.twilio;
     if (!tw.error) {
       add(Date.parse(tw.call.start_time), 'twilio', 'TWILIO', `Call starts: ${tw.call.from} → ${tw.call.to}`);
-      (Array.isArray(tw.events) ? tw.events : []).forEach((e) => add(Date.parse(e.at), `twilio${e.response_code >= 400 ? ' bad' : ''}`, 'TWILIO',
+      (Array.isArray(tw.events) ? tw.events : []).forEach((e) => add(Date.parse(e.at), `twilio ${e.response_code >= 400 ? 'bad' : e.response_code >= 200 && e.response_code < 300 ? 'ok' : ''}`, 'TWILIO',
         `${e.method || ''} ${shortUrl(e.url)} → HTTP ${e.response_code ?? '?'} in ${e.ms ?? '?'} ms`, e.body ? e.body.slice(0, 260) : ''));
       (Array.isArray(tw.notifications) ? tw.notifications : []).forEach((n) => add(Date.parse(n.at), `twilio ${n.level === 'error' ? 'bad' : 'warn'}`, 'TWILIO', `Alert ${n.code} (${n.level})`, safeDecode(n.text).slice(0, 300)));
       if (tw.call.end_time) add(Date.parse(tw.call.end_time), 'twilio', 'TWILIO', `Call ends: ${tw.call.status}, ${tw.call.duration} s, price ${tw.call.price ?? 'pending'}`);
@@ -116,9 +116,9 @@
           t.role === 'agent' && (llm || gap) ? `LLM first token ${llm?.toFixed(2) ?? '?'} s · caller heard audio ${gap?.toFixed(2) ?? '?'} s after they stopped talking${t.interrupted ? ' · interrupted' : ''}` : '');
       }
       t.tool_calls.forEach((c) => add(at, 'el', 'ELEVENLABS', `Calls tool ${c.tool_name}${c.url ? ' → POST ' + shortUrl(c.url) : ''}`, c.body ? c.body.slice(0, 400) : (c.params || '')));
-      t.tool_results.forEach((r) => { const o = toolOutcome(r); add(at + 1, `el ${o.level === 'ok' ? '' : o.level}`, 'ELEVENLABS', `Tool ${r.tool_name} result in ${r.latency_secs?.toFixed(2)} s: ${o.text}`, String(r.result || '').slice(0, 400)); });
+      t.tool_results.forEach((r) => { const o = toolOutcome(r); add(at + 1, `el ${o.level}`, 'ELEVENLABS', `Tool ${r.tool_name} result in ${r.latency_secs?.toFixed(2)} s: ${o.text}`, String(r.result || '').slice(0, 400)); });
     });
-    (d.function_trace.data || []).forEach((r) => add(Date.parse(r.created_at), `fn${r.status_code >= 400 || r.success === false || r.phase === 'started' ? ' bad' : ''}`, 'NETLIFY',
+    (d.function_trace.data || []).forEach((r) => add(Date.parse(r.created_at), `fn ${r.status_code >= 400 || r.success === false || r.phase === 'started' ? 'bad' : 'ok'}`, 'NETLIFY',
       r.phase === 'started' ? `Tool function started ${r.tool_name} (drill: ${r.fault_key || 'none'}) — no finish row means it never answered` : `Tool function ${r.tool_name} → HTTP ${r.status_code} in ${r.latency_ms} ms, ${r.outcome_state || (r.success ? 'ok' : 'failed')}`,
       [r.error && `error: ${r.error}`, r.fault_key && `drill fired: ${r.fault_key}`].filter(Boolean).join(' · ')));
     (d.supabase.pma_voice_sessions.data || []).forEach((s) => {
