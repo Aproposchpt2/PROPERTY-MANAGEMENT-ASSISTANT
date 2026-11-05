@@ -10,7 +10,7 @@ const TENANT_HTML = (caseNumber) => `<!DOCTYPE html>
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:560px;width:100%">
         <tr><td style="background:#1a1a2e;padding:24px 32px">
           <p style="margin:0;color:#ffffff;font-size:18px;font-weight:bold">Desert Ridge Customer Care</p>
-          <p style="margin:4px 0 0;color:#a0aec0;font-size:13px">Stellar Intelligent Technologies</p>
+          <p style="margin:4px 0 0;color:#a0aec0;font-size:13px">Stellar Intelligent Software Developers</p>
         </td></tr>
         <tr><td style="padding:32px">
           <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e">Your maintenance request has been received and is on file.</p>
@@ -30,7 +30,7 @@ const TENANT_HTML = (caseNumber) => `<!DOCTYPE html>
           </table>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0">
-          <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center">Desert Ridge Property Management &bull; Powered by Stellar Intelligent Technologies</p>
+          <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center">Desert Ridge Property Management &bull; Powered by Stellar Intelligent Software Developers</p>
         </td></tr>
       </table>
     </td></tr>
@@ -51,7 +51,7 @@ const TENANT_HTML_ES = (caseNumber) => `<!DOCTYPE html>
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:560px;width:100%">
         <tr><td style="background:#1a1a2e;padding:24px 32px">
           <p style="margin:0;color:#ffffff;font-size:18px;font-weight:bold">Desert Ridge Customer Care</p>
-          <p style="margin:4px 0 0;color:#a0aec0;font-size:13px">Stellar Intelligent Technologies</p>
+          <p style="margin:4px 0 0;color:#a0aec0;font-size:13px">Stellar Intelligent Software Developers</p>
         </td></tr>
         <tr><td style="padding:32px">
           <p style="margin:0 0 16px;font-size:15px;color:#1a1a2e">Su solicitud de mantenimiento ha sido recibida y est&#225; en registro.</p>
@@ -71,7 +71,7 @@ const TENANT_HTML_ES = (caseNumber) => `<!DOCTYPE html>
           </table>
         </td></tr>
         <tr><td style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0">
-          <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center">Desert Ridge Property Management &bull; Powered by Stellar Intelligent Technologies</p>
+          <p style="margin:0;font-size:12px;color:#a0aec0;text-align:center">Desert Ridge Property Management &bull; Powered by Stellar Intelligent Software Developers</p>
         </td></tr>
       </table>
     </td></tr>
