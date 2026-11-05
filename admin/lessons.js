@@ -5,6 +5,8 @@
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
   const mask = (n) => (n && n.length > 4 ? `***${n.slice(-4)}` : n);
+  // The caller's case confirmation: the SID saved on the case wins, then any text to the caller.
+  const pickText = (msgs) => msgs.find((x) => x.saved_on_case) || msgs.find((x) => x.to_caller) || msgs[0];
   const toolResults = (d, name) => d.elevenlabs.turns.flatMap((t) => t.tool_results.filter((r) => r.tool_name === name).map((r) => ({ ...r, at: t.at })));
 
   const LESSONS = [
@@ -18,7 +20,7 @@
         'So the tool result Ava gets back, notificationState "SENT", only means "Twilio accepted it". To know whether the caller\'s phone got it, you look up the Message SID.',
       ],
       visual: (d) => {
-        const m = (d.sms?.data || []).find((x) => x.to_caller) || (d.sms?.data || [])[0];
+        const m = pickText(d.sms?.data || []);
         const st = !m ? 'na' : m.status === 'delivered' ? 'ok' : ['undelivered', 'failed'].includes(m.status) ? 'bad' : 'warn';
         return [['Ava (ElevenLabs)', 'ok'], ['record_contact_preference', 'ok'], ['Netlify function', 'ok'], ['Twilio API: 201 + SM SID', m ? 'ok' : 'na'], ['Carrier', st], ['Caller\'s phone', st]];
       },
@@ -32,7 +34,7 @@
       example: (d) => {
         const pref = toolResults(d, 'record_contact_preference').map((r) => parse(r.result));
         const msgs = d.sms?.data || [];
-        const m = msgs.find((x) => x.to_caller) || msgs[0];
+        const m = pickText(msgs);
         const record = {
           tool_result_ava_received: pref[0] ? { notificationState: pref[0].notificationState, notificationSent: pref[0].notificationSent } : null,
           twilio_message_resource: m ? { sid: m.sid, to: mask(m.to), status: m.status, error_code: m.error_code, error_message: m.error_message, date_created: m.date_created, date_updated: m.date_updated, saved_on_case: m.saved_on_case } : null,
@@ -46,7 +48,11 @@
           if (m.status === 'delivered') read.push('Twilio now reports "delivered": the carrier confirmed the handset received it. This text worked end to end.');
           else if (['undelivered', 'failed'].includes(m.status)) read.push(`Twilio reports "${m.status}" with error ${m.error_code}. Twilio accepted the request but the text never reached the phone, even though Ava told the caller it was sent.`);
           else read.push(`Twilio reports "${m.status}". Delivery has not been confirmed.`);
-          if (msgs.length > 1) read.push(`${msgs.length - 1} other text(s) went out in the same window, most likely the staff notifications. Check their status too.`);
+          const others = msgs.filter((x) => x !== m);
+          if (others.length) {
+            const same = others.filter((x) => x.to_caller).length;
+            read.push(`${others.length} other text(s) went out in the same window (${others.map((x) => x.status).join(', ')}).${same ? ` ${same} of them went to the caller's own number. The staff alerts go to the numbers in PMA_SMS_MAINTENANCE_NUMBER and PMA_SMS_MANAGER_NUMBER; if those point to the same phone you test from, you receive the staff alerts too.` : ''}`);
+          }
         }
         return { record, read };
       },
@@ -138,7 +144,7 @@
           call_cut_off: two ? { conversation: two.conversation_id, status: two.status, duration_secs: two.duration_secs, termination_reason: two.termination_reason, tools_run: two.turns.flatMap((t) => t.tool_calls.map((c) => c.tool_name)) } : null,
         };
         const read = [
-          `The first record failed with ${one.error?.reason || one.status}. Duration ${one.duration_secs} s, ${record.call_that_never_started.tools_run} tools.`,
+          `The first record failed with: ${String(one.error?.reason || one.status).replace(/\.$/, '')}. Duration ${one.duration_secs} s, ${record.call_that_never_started.tools_run} tools.`,
           d1.twilio.error ? 'Twilio\'s side could not be read here.' : `Twilio shows that call as "${d1.twilio.call.status}", ${d1.twilio.call.duration} s: the phone leg worked.`,
         ];
         if (two) read.push(`The earlier call ended after ${two.duration_secs} s with "${two.termination_reason}". Credits ran out during that call, and every call after it failed until credits were added.`);
