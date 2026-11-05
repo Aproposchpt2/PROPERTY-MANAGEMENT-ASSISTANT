@@ -153,4 +153,4 @@
 /* Elevate the PMA care-center value proposition in the second hero. */
 .hero .hero-care-center{font:400 clamp(35px,4.8vw,65px)/1.12 'Cormorant Garamond',Georgia,serif;color:#E4C878;margin:24px 0}.hero .hero-service-message{font-size:clamp(18px,2vw,24px);line-height:1.75;max-width:940px;color:#F7F4EC;padding-left:23px;border-left:2px solid #C8A84B}.hero .hero-content{max-width:1000px}
 @media(max-width:700px){.hero .hero-service-message{padding-left:16px}}
-@media(max-width:560px){.hero .hero-content{min-width:0;max-width:100%}.hero .pma-product-heading,.hero .pma-product-heading span,.hero .pma-product-heading em{font-size:clamp(1.9rem,11vw,3rem);overflow-wrap:break-word}}
+@media(max-width:560px){.hero .hero-content{min-width:0;max-width:100%}.hero .pma-product-heading,.hero .pma-product-heading span,.hero .pma-product-heading em{font-size:clamp(1.7rem,10.5vw,3rem);line-height:1.08}.hero .pma-product-heading span,.hero .pma-product-heading em{display:block;white-space:nowrap}}
