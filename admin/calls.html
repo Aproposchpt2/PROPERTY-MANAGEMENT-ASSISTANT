@@ -7,8 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&family=Syncopate&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/admin/ops-admin.css">
 <style>
-.lab{display:grid;grid-template-columns:330px 1fr;min-height:calc(100vh - 32px)}
-.lab-left{border-right:1px solid var(--line);background:#0b0b0b;display:flex;flex-direction:column;min-width:0}
+.lab{display:grid;grid-template-columns:330px minmax(0,1fr);grid-template-rows:minmax(0,1fr);flex:1;min-height:0;overflow:hidden}
+.lab-left{border-right:1px solid var(--line);background:#0b0b0b;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.call-list{min-height:0}
+.lab-main{min-height:0;overflow-y:auto}
 .lab-left-top{padding:18px 18px 10px;border-bottom:1px solid var(--line)}
 .lab-left-top h1{font:500 28px/1.1 'Cormorant Garamond',serif;margin:0 0 10px;color:var(--ivory)}
 .lab-tabs{display:flex;gap:6px;margin-top:10px}
@@ -60,7 +62,7 @@ select.field-input{appearance:auto}
 body.practice .flags,body.practice .hop .s,body.practice .ev.bad .what,body.practice .ev.warn .what{color:inherit;border-color:var(--line)}
 body.practice .flags{display:none}
 body.practice .hop{border-color:var(--line)!important}
-@media (max-width:900px){.lab{grid-template-columns:1fr}.lab-left{max-height:46vh}.path{grid-template-columns:1fr 1fr}.drill-form{grid-template-columns:1fr 1fr}.lab-main{padding:16px}}
+@media (max-width:900px){.lab{grid-template-columns:minmax(0,1fr);grid-template-rows:42vh minmax(0,1fr)}.lab-left{border-right:0;border-bottom:1px solid var(--line)}.path{grid-template-columns:1fr 1fr}.drill-form{grid-template-columns:1fr 1fr}.lab-main{padding:16px}}
 </style>
 </head>
 <body class="ops-app">
