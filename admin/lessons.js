@@ -165,6 +165,110 @@
       },
       takeaway: 'Caller → Twilio (OK) → ElevenLabs (refused: no credits) → nothing downstream. When later hops are empty, the fault is at the last hop that has records.',
     },
+    {
+      id: 'academy-diagnostic-1',
+      title: "HTTP 201 Created: accepted does not mean delivered",
+      calls: [],
+      synthetic: true,
+      layman: ["The messaging provider accepted a new message resource. Think of a courier assigning a tracking number; the package has not arrived yet."],
+      visual: () => [["POST /Messages","ok"],["HTTP 201 Created","ok"],["Message SID assigned","ok"],["carrier pending","warn"]],
+      technical: { text: ["201 Created confirms resource creation, not handset delivery."], fields: [["http_status","Synthetic diagnostic value: 201 Created"],["message_sid","Synthetic diagnostic value: SM (synthetic example)"],["status","Synthetic diagnostic value: queued"]] },
+      example: () => ({ record: { synthetic: true, scenario: "HTTP 201 Created: accepted does not mean delivered", diagnostic: Object.fromEntries([["http_status","201 Created"],["message_sid","SM (synthetic example)"],["status","queued"]]) }, read: ["201 Created confirms resource creation, not handset delivery."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "A notification tool returns 201 and a Message SID. What is proven?", options: ["The recipient read the text.","Twilio created a Message resource; delivery still requires verification.","The carrier rejected the text."], answer: 1, why: "201 is the creation checkpoint. Retrieve the SID and check later status." },
+      takeaway: "201 is the creation checkpoint. Retrieve the SID and check later status.",
+    },
+    {
+      id: 'academy-diagnostic-2',
+      title: "HTTP 200 with failed business outcome",
+      calls: [],
+      synthetic: true,
+      layman: ["A diagnostic dashboard can load correctly while reporting an equipment fault. Successful reporting is not successful repair."],
+      visual: () => [["GET incident","ok"],["HTTP 200","ok"],["JSON notification_status: failed","warn"]],
+      technical: { text: ["HTTP success describes the GET transaction; JSON describes the incident workflow."], fields: [["http_status","Synthetic diagnostic value: 200 OK"],["incident_status","Synthetic diagnostic value: open"],["notification_status","Synthetic diagnostic value: failed"]] },
+      example: () => ({ record: { synthetic: true, scenario: "HTTP 200 with failed business outcome", diagnostic: Object.fromEntries([["http_status","200 OK"],["incident_status","open"],["notification_status","failed"]]) }, read: ["HTTP success describes the GET transaction; JSON describes the incident workflow."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "GET returns 200 with notification_status failed. What follows?", options: ["The notification succeeded.","The incident was deleted.","The retrieval succeeded, but notification is reported failed."], answer: 2, why: "Inspect the notification attempt and its provider evidence." },
+      takeaway: "Inspect the notification attempt and its provider evidence.",
+    },
+    {
+      id: 'academy-diagnostic-3',
+      title: "Sent is not delivered: reading JSON null",
+      calls: [],
+      synthetic: true,
+      layman: ["A router forwarding a packet to its next hop does not prove end-to-end arrival."],
+      visual: () => [["Twilio accepted","ok"],["sent","ok"],["delivery still unconfirmed","warn"]],
+      technical: { text: ["JSON null is absence of a recorded value, not a success flag."], fields: [["status","Synthetic diagnostic value: sent"],["error_code","Synthetic diagnostic value: null"]] },
+      example: () => ({ record: { synthetic: true, scenario: "Sent is not delivered: reading JSON null", diagnostic: Object.fromEntries([["status","sent"],["error_code",null]]) }, read: ["JSON null is absence of a recorded value, not a success flag."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "Twilio says status sent and error_code null. Which interpretation is correct?", options: ["The handset definitely received it.","The message was sent onward; delivery has not been confirmed.","The message was rejected."], answer: 1, why: "Check later delivery status or callbacks; do not equate null with success." },
+      takeaway: "Check later delivery status or callbacks; do not equate null with success.",
+    },
+    {
+      id: 'academy-diagnostic-4',
+      title: "Delivered does not mean read",
+      calls: [],
+      synthetic: true,
+      layman: ["A courier may confirm a package was delivered without knowing whether anyone opened it."],
+      visual: () => [["Twilio status: delivered","ok"],["handset delivery reported","ok"],["reading unknown","warn"]],
+      technical: { text: ["A delivery receipt is not a read receipt."], fields: [["status","Synthetic diagnostic value: delivered"],["error_code","Synthetic diagnostic value: null"]] },
+      example: () => ({ record: { synthetic: true, scenario: "Delivered does not mean read", diagnostic: Object.fromEntries([["status","delivered"],["error_code",null]]) }, read: ["A delivery receipt is not a read receipt."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "What does delivered establish?", options: ["The person read the SMS.","The application database is closed.","Twilio reports delivery, not that the recipient read it."], answer: 2, why: "Delivery confirmation is not proof of human acknowledgement." },
+      takeaway: "Delivery confirmation is not proof of human acknowledgement.",
+    },
+    {
+      id: 'academy-diagnostic-5',
+      title: "401 Unauthorized: authentication rejected",
+      calls: [],
+      synthetic: true,
+      layman: ["The security desk cannot verify your badge, so it refuses entry."],
+      visual: () => [["Client","ok"],["API","ok"],["401 Unauthorized","warn"]],
+      technical: { text: ["401 is named Unauthorized but generally points to missing or invalid authentication."], fields: [["http_status","Synthetic diagnostic value: 401 Unauthorized"],["operation","Synthetic diagnostic value: GET /Messages/{sid}"]] },
+      example: () => ({ record: { synthetic: true, scenario: "401 Unauthorized: authentication rejected", diagnostic: Object.fromEntries([["http_status","401 Unauthorized"],["operation","GET /Messages/{sid}"]]) }, read: ["401 is named Unauthorized but generally points to missing or invalid authentication."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "Which check comes first for a reported 401?", options: ["Inspect the authentication credentials, account context and request method.","Check carrier delivery.","Recreate the incident."], answer: 0, why: "401 is an authentication checkpoint; check the provider error details." },
+      takeaway: "401 is an authentication checkpoint; check the provider error details.",
+    },
+    {
+      id: 'academy-diagnostic-6',
+      title: "403 Forbidden: access refused",
+      calls: [],
+      synthetic: true,
+      layman: ["Your badge identifies you, but does not grant access to every secured room."],
+      visual: () => [["Authenticated client","ok"],["protected resource","ok"],["403 Forbidden","warn"]],
+      technical: { text: ["403 commonly indicates permission or policy refusal; it does not always prove authentication succeeded."], fields: [["http_status","Synthetic diagnostic value: 403 Forbidden"],["resource","Synthetic diagnostic value: protected message report"]] },
+      example: () => ({ record: { synthetic: true, scenario: "403 Forbidden: access refused", diagnostic: Object.fromEntries([["http_status","403 Forbidden"],["resource","protected message report"]]) }, read: ["403 commonly indicates permission or policy refusal; it does not always prove authentication succeeded."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "One resource returns 200 and another 403. Best next step?", options: ["Assume the network is offline.","Compare authorization, resource ownership, account context and response details.","Assume SMS was delivered."], answer: 1, why: "Investigate access rules for the specific resource." },
+      takeaway: "Investigate access rules for the specific resource.",
+    },
+    {
+      id: 'academy-diagnostic-7',
+      title: "Missing environment variable: no request sent",
+      calls: [],
+      synthetic: true,
+      layman: ["The technician cannot find the labeled credential before making the call."],
+      visual: () => [["Netlify","ok"],["credential validation failed","ok"],["Twilio not contacted","warn"]],
+      technical: { text: ["process.env looks up the exact variable key; a different key name is not automatically equivalent."], fields: [["missing_variable","Synthetic diagnostic value: TWILIO_API_SECRET"],["configured_variable","Synthetic diagnostic value: TWILIO_AUTH_KEY"],["api_request_sent","Synthetic diagnostic value: false"]] },
+      example: () => ({ record: { synthetic: true, scenario: "Missing environment variable: no request sent", diagnostic: Object.fromEntries([["missing_variable","TWILIO_API_SECRET"],["configured_variable","TWILIO_AUTH_KEY"],["api_request_sent",false]]) }, read: ["process.env looks up the exact variable key; a different key name is not automatically equivalent."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "What should you inspect first?", options: ["Twilio carrier logs.","Netlify variable names, scope and function code.","Recipient handset settings."], answer: 1, why: "No API request means isolate the local configuration stage first." },
+      takeaway: "No API request means isolate the local configuration stage first.",
+    },
+    {
+      id: 'academy-diagnostic-8',
+      title: "Message SID and error code: find the failing hop",
+      calls: [],
+      synthetic: true,
+      layman: ["A shipping tracking number lets you find the package's latest disposition."],
+      visual: () => [["Netlify 201","ok"],["SM SID","ok"],["Twilio status undelivered","warn"]],
+      technical: { text: ["A Message SID identifies the message resource; an undelivered status and provider error guide the next investigation."], fields: [["status","Synthetic diagnostic value: undelivered"],["error_code","Synthetic diagnostic value: 30003"],["sid","Synthetic diagnostic value: SMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]] },
+      example: () => ({ record: { synthetic: true, scenario: "Message SID and error code: find the failing hop", diagnostic: Object.fromEntries([["status","undelivered"],["error_code",30003],["sid","SMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]]) }, read: ["A Message SID identifies the message resource; an undelivered status and provider error guide the next investigation."] }),
+      steps: ['Identify the HTTP method and status, if present.', 'Read the JSON fields without assuming downstream success.', 'Find the last confirmed successful hop and the first observed failure.', 'Correlate the Message SID, request logs and provider error details when applicable.', 'Verify the actual outcome before retrying; avoid duplicate messages or incidents.'],
+      check: { q: "Twilio accepted the message but later reports undelivered, code 30003. Next action?", options: ["Inspect the message's provider diagnostics and destination reachability.","Assume the original webhook never arrived.","Declare successful delivery."], answer: 0, why: "30003 indicates an unreachable destination handset, but not the precise physical cause." },
+      takeaway: "30003 indicates an unreachable destination handset, but not the precise physical cause.",
+    }
   ];
 
   const done = (id) => { try { return localStorage.getItem('lesson_' + id); } catch { return null; } };
@@ -175,7 +279,7 @@
 
   function listView(main, ctx) {
     main.innerHTML = `<h2 class="ls-h">Lessons</h2>
-      <p class="desc">Each lesson follows the same order: layman's explanation, visual, technical explanation, a production example pulled live from your own calls, the troubleshooting sequence, and a knowledge check.</p>
+      <p class="desc">Each lesson follows the same order: layman's explanation, visual, technical explanation, a production example from your calls or a clearly labeled synthetic diagnostic, the troubleshooting sequence, and a knowledge check.</p>
       ${LESSONS.map((l, i) => `<button class="call ls-pick" data-id="${l.id}" style="border:1px solid var(--line);margin-bottom:8px"><b>Lesson ${i + 1}: ${esc(l.title)}</b><div class="sub">${done(l.id) === 'right' ? 'Knowledge check passed' : done(l.id) ? 'Knowledge check attempted' : 'Not started'}</div></button>`).join('')}`;
     main.querySelectorAll('.ls-pick').forEach((b) => b.addEventListener('click', () => lessonView(main, ctx, b.dataset.id)));
   }
@@ -184,7 +288,7 @@
     const l = LESSONS.find((x) => x.id === id); const n = LESSONS.indexOf(l) + 1;
     main.innerHTML = `<p class="muted">Loading the real records for this lesson…</p>`;
     let data;
-    try { data = await Promise.all(l.calls.map((c) => ctx.api('/api/ops/trace/calls/' + c))); }
+    try { data = l.synthetic ? [] : await Promise.all(l.calls.map((c) => ctx.api('/api/ops/trace/calls/' + c))); }
     catch (e) { main.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const ex = l.example(...data);
     const prev = done(l.id);
@@ -196,7 +300,7 @@
       <section class="ls-sec"><h3>2. Visual: follow the transaction</h3>${chain(l.visual(...data))}<p class="muted small">Colors come from this call's real records (green worked, red failed, amber not confirmed, grey not reached).</p></section>
       <section class="ls-sec"><h3>3. Technical explanation</h3>${l.technical.text.map((p) => `<p>${esc(p)}</p>`).join('')}
         <table class="fields"><thead><tr><th>Field</th><th>Diagnostic purpose</th></tr></thead><tbody>${l.technical.fields.map(([f, p]) => `<tr><td class="mono">${esc(f)}</td><td>${esc(p)}</td></tr>`).join('')}</tbody></table></section>
-      <section class="ls-sec"><h3>4. Production example: your real records</h3>
+      <section class="ls-sec"><h3>4. ${l.synthetic ? 'Synthetic diagnostic example (training only)' : 'Production example: your real records'}</h3>
         <pre class="ls-pre">${esc(JSON.stringify(ex.record, null, 2))}</pre>
         <p><b>Reading it precisely:</b></p><ul>${ex.read.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
         <div class="drawer-actions">${l.calls.map((c) => `<button class="btn-sm ls-open" data-c="${c}">Open the full trace for ${esc(c.slice(0, 14))}…</button>`).join('')}</div></section>
