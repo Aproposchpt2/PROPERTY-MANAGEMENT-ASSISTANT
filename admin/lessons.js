@@ -165,7 +165,6 @@
       },
       takeaway: 'Caller → Twilio (OK) → ElevenLabs (refused: no credits) → nothing downstream. When later hops are empty, the fault is at the last hop that has records.',
     },
-,
     {
       id: 'academy-diagnostic-1',
       title: "HTTP 201 Created: accepted does not mean delivered",
