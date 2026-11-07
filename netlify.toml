@@ -27,6 +27,13 @@
 
 # The site publishes the repo root, so internal folders and files are blocked here.
 # These rules come first: the first matching redirect wins.
+# Retired FlowDesk Pro page (removed 2026-11-07)
+[[redirects]]
+  from = "/past-performance.html"
+  to = "/"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/docs/*"
   to = "/404.html"
@@ -174,11 +181,6 @@
 
 [[headers]]
   for = "/demo-request.html"
-  [headers.values]
-    X-Robots-Tag = "noindex, nofollow"
-
-[[headers]]
-  for = "/past-performance.html"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
 
