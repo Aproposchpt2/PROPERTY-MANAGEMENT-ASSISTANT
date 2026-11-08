@@ -1,8 +1,12 @@
 # PROPERTY MANAGEMENT ASSISTANT: App
 
-Expo (SDK 58) + Expo Router + TypeScript. **Delivered as a web app** at
-`https://pma.stellaruc.com/app` that residents and managers add to their home screen (no App
-Store). The same code also builds native iOS/Android apps if ever needed.
+Expo (SDK 58) + Expo Router + TypeScript. Part of the PMA delivery package, no public store listing:
+
+- **Managers:** in-house iPhone/Android app from private install links (`eas.json` profile `internal`):
+  `npx eas-cli@latest build --profile internal --platform all` (setup: launch guide, Part 3).
+- **Residents:** web app at `https://pma.stellaruc.com/app`, added to the home screen.
+
+What it does:
 
 - **Residents:** request maintenance (same result as calling the Customer Care Center: case number,
   emergency escalation, staff alerts, text or email confirmation, status link) and follow their cases.

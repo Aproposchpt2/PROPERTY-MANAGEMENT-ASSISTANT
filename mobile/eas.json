@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "internal": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://vqrqyanqsiqzsmlhytaz.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_S0l5GIDgAiECvhL-03FUkA_r8kjUjr9",
+        "EXPO_PUBLIC_PMA_API_BASE": "https://pma.stellaruc.com",
+        "EXPO_PUBLIC_PMA_PHONE": "+17252010584",
+        "EXPO_PUBLIC_ENABLE_MANAGER": "true"
+      }
+    },
+    "production": {
+      "extends": "internal",
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

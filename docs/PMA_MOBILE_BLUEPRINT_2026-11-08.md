@@ -23,15 +23,17 @@ providers, answer cost approvals and send updates to residents.
 
 ### Delivery and pricing (decided 2026-11-08)
 
-- **No App Store.** The app is part of the delivery package and the differentiator. It ships as a
-  **web app** at `pma.stellaruc.com/app` that residents and managers add to their home screen; it
-  then opens full screen with the PMA icon. Nothing to download from a store; no Apple review.
+- **No public App Store or Google Play listing.** The app is part of the delivery package and the
+  differentiator.
+- **Managers: in-house mobile app** (iPhone and Android) from private install links (Expo EAS internal
+  distribution, `mobile/eas.json` profile `internal`), with native alerts. Apple requires each iPhone to
+  be registered first (up to 100 per year per Apple account).
+- **Residents: web app** at `pma.stellaruc.com/app`, added to the home screen; nothing to register.
+  Managers can also use it on any device, with web push alerts.
+- One codebase (Expo) for both; the in-house app also contains the resident screens.
 - **Price:** $999/mo platform fee (app included) + $0.50/min usage
   (`PMA_MULTI_SUBSCRIBER_BILLING.md`).
-- **Manager alerts** use standard web push (section 2A). iPhone needs iOS 16.4+ and the app opened
-  from the Home Screen.
-- The same code still builds native iPhone/Android apps with native push if ever needed
-  (launch guide, appendix); that path is optional and not part of the delivery.
+- Launch steps: [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md) (Part 3 for the in-house app).
 
 ---
 
@@ -165,7 +167,7 @@ Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the
 | Delivery | **Web app** at `pma.stellaruc.com/app` (Expo web export, `experiments.baseUrl: "/app"`), built by Netlify on each deploy (`scripts/build-web-app.sh` → `./app`, git-ignored). Installable: `public/manifest.webmanifest`, PMA icons, `public/index.html`. Same-origin API calls |
 | Storage | Phones: SecureStore. Web: the browser's localStorage (`src/lib/storage.ts`) |
 | Dialogs | `src/lib/dialog.ts`: browser dialogs on the web (React Native's Alert does nothing there), native alerts on phones |
-| Native builds | iOS/Android still build from the same code (optional; launch guide appendix) |
+| In-house app | iOS/Android from the same code; `mobile/eas.json` profile `internal` (private install links, APK on Android, manager screens on, public values in `env`); `production` profile kept for a possible store listing |
 
 | File | Screen | Phase |
 |---|---|---|
@@ -264,7 +266,8 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Netlify | `PMA_WEB_PUSH_SUBJECT` | **New.** `mailto:` contact address for push services |
 | Netlify | `EXPO_ACCESS_TOKEN` | Optional; native builds only, with enhanced push security |
 | `netlify.toml` | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_PMA_PHONE`, `EXPO_PUBLIC_ENABLE_MANAGER="true"` | Public values compiled into the web app (committed; never secrets) |
-| Native builds | `EXPO_PUBLIC_PMA_API_BASE` | `https://pma.stellaruc.com` (the web app uses same-origin URLs) |
+| `mobile/eas.json` (`internal`) | `EXPO_PUBLIC_*` incl. `EXPO_PUBLIC_PMA_API_BASE=https://pma.stellaruc.com` | Public values for the in-house app (the web app uses same-origin URLs) |
+| Expo / Apple / Firebase | EAS project id (`eas init`), Apple Developer account, FCM service-account key (`eas credentials`), `mobile/google-services.json` | In-house app builds and Android alerts |
 
 ---
 
@@ -277,6 +280,8 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Single property | Inherited from the voice path (`PMA_TENANT_ID`, `PMA_PROPERTY_ID`); step 9 before serving several customers from one deployment |
 | Repo vs live approval functions | `pma_mgr_approve_case_v1` exists only in the live database; the repo's 4-argument case functions are not what is live (step 6) |
 | Web push on iPhone | Only for PMA opened from the Home Screen, iOS 16.4+; the Alerts screen explains this. Staff texts are unchanged |
+| In-house iPhone limit | Ad hoc installs: registered iPhones only, up to 100 per year per Apple account; a new iPhone needs a rebuild. Beyond that: TestFlight (90-day builds) or unlisted App Store (launch guide appendix) |
+| In-house app not built yet | Needs the Expo account, Apple Developer account and Firebase setup (launch guide 3.2); no in-house build has been made |
 | Web push delivery | Browsers' push services may delay or drop alerts when a device is asleep or offline; staff texts remain the guaranteed channel for emergencies |
 | Netlify build step | Deploys now build the web app; if that build fails, the deploy fails and the previous one stays live |
 | iOS critical alerts | Emergencies use normal alerts; bypassing silent mode needs an Apple entitlement (native app only) |

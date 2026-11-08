@@ -231,3 +231,23 @@ the Oct 2026 table, then $499/mo).
 
 New Netlify settings: `PMA_WEB_PUSH_PUBLIC_KEY`, `PMA_WEB_PUSH_PRIVATE_KEY` (secret),
 `PMA_WEB_PUSH_SUBJECT`. The native phone-app code and its push support remain and still build.
+
+---
+
+## 10. In-house mobile app for managers (later on 2026-11-08)
+
+**Decision:** the package includes an **in-house mobile app** (no public store listing). Because Apple
+only allows in-house iPhone installs on registered devices (up to 100 per year per Apple account):
+**managers** get the in-house app on iPhone and Android with native alerts; **residents** keep the web
+app at `/app`. Same codebase; Expo stays.
+
+| File | Change |
+|---|---|
+| `mobile/eas.json` | **New.** Profile `internal`: private install links (EAS internal distribution), APK on Android, manager screens on, public `EXPO_PUBLIC_*` values, auto-incremented build numbers. Profile `production` kept for a possible store listing |
+| `mobile/assets/android-icon-*.png`, `splash-icon.png`, `mobile/app.json` | PMA icons for Android (replacing Expo placeholders); adaptive icon background black |
+| `docs/PMA_MOBILE_LAUNCH_GUIDE.md` | Part 3 rewritten: Expo/Apple/Firebase setup, register managers' iPhones, build, install links, Developer Mode; Part 4 native + web alerts; hand-off, troubleshooting, rollback, appendix (beyond 100 iPhones / store later) |
+| `docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md`, `PMA_MULTI_SUBSCRIBER_BILLING.md`, `mobile/README.md` | Delivery wording updated |
+
+Verified: iPhone and Android bundles build with the manager screens on and point at
+`https://pma.stellaruc.com`; `eas.json` and `app.json` are valid. **Not done:** an actual EAS build
+(needs your Expo account, Apple Developer account and Firebase project).

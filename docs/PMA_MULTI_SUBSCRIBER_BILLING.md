@@ -116,9 +116,10 @@ Add `platform_fee_usd` ($999 flat) to `usage_charge_usd` to get total monthly in
 
 ## Pricing Model (updated 2026-11-08)
 
-The PMA app is part of the delivery package and is the differentiator: residents request
-maintenance and follow their case, and managers run cases, approvals and alerts, from a web app
-at `pma.stellaruc.com/app` that installs to the home screen. No App Store; nothing extra to buy.
+The PMA app is part of the delivery package and is the differentiator: managers get the in-house
+mobile app (iPhone and Android, private install links, native alerts) to run cases, approvals and
+alerts; residents request maintenance and follow their case from the web app at
+`pma.stellaruc.com/app`, added to the home screen. No public App Store listing; nothing extra to buy.
 
 | Component | Rate |
 |---|---|
