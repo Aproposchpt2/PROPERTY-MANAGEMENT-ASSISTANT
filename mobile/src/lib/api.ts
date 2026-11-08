@@ -63,3 +63,52 @@ export async function updateCase(id: string, patch: CasePatch) {
 export async function getPortalCase(token: string): Promise<PortalCase> {
   return request<PortalCase>(`/api/portal/case?t=${encodeURIComponent(token)}`);
 }
+
+// Maintenance request (the app's version of calling the Customer Care Center).
+// Step 1 texts a code to the resident's phone; step 2 files the request with that code.
+export type CodeResponse = { success: true; challenge: string; expiresAt: number; phoneLast4: string };
+export type RequestPayload = {
+  challenge: string;
+  code: string;
+  reportedName: string;
+  reportedAddress: string;
+  reportedUnit: string;
+  description: string;
+  language: 'en' | 'es';
+  contactMethod: 'sms' | 'email';
+  email?: string;
+  consent: boolean;
+};
+export type RequestResult = {
+  success: true;
+  caseNumber: string;
+  urgent: boolean;
+  statusToken: string | null;
+  notificationSent: boolean;
+  notificationState: string;
+};
+
+// These endpoints return a resident-readable `error` and a `state`; surface both.
+export class RequestError extends Error {
+  constructor(public status: number, public state: string, message: string) {
+    super(message);
+  }
+}
+
+async function postApp<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(API_BASE + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  } catch {
+    throw new RequestError(0, 'OFFLINE', 'No connection. Check your network and try again, or call the property line.');
+  }
+  let data: any = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok || !data?.success) {
+    throw new RequestError(res.status, data?.state ?? 'UNKNOWN', data?.error ?? 'Something went wrong. Try again, or call the property line.');
+  }
+  return data as T;
+}
+
+export const requestCode = (phone: string) => postApp<CodeResponse>('/api/app/verify', { phone });
+export const submitRequest = (payload: RequestPayload) => postApp<RequestResult>('/api/app/request', payload);

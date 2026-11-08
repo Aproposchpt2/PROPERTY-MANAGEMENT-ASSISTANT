@@ -1,4 +1,5 @@
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
+import { MANAGER_ENABLED } from '../../lib/config';
 import { useSession } from '../../lib/session';
 import { Centered } from '../../components/ui';
 import { ActivityIndicator } from 'react-native';
@@ -8,6 +9,8 @@ import { colors } from '../../lib/theme';
 // every manager API call is also checked on the server against tenant_users role and property access.
 export default function ManagerLayout() {
   const { session, loading } = useSession();
+  // Phase 2 feature: hidden, and unreachable by link, until EXPO_PUBLIC_ENABLE_MANAGER=true.
+  if (!MANAGER_ENABLED) return <Redirect href="/" />;
   if (loading) return <Centered><ActivityIndicator color={colors.teal} /></Centered>;
   return (
     <Stack

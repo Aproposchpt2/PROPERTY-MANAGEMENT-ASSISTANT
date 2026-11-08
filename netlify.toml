@@ -25,6 +25,9 @@
   [functions."ops-trace-api"]
     timeout = 26
 
+  [functions."pma-app-api"]
+    timeout = 26
+
 # The site publishes the repo root, so internal folders and files are blocked here.
 # These rules come first: the first matching redirect wins.
 # Retired FlowDesk Pro page (removed 2026-11-07)
@@ -151,6 +154,12 @@
 [[redirects]]
   from = "/api/manager/*"
   to = "/.netlify/functions/pma-manager-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/app/*"
+  to = "/.netlify/functions/pma-app-api"
   status = 200
   force = true
 

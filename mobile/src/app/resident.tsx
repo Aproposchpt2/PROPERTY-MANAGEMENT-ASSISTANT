@@ -37,11 +37,9 @@ export default function Resident() {
     <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
       <Text style={s.h}>Report an Issue</Text>
       <Card style={s.gap}>
-        <Text style={s.p}>
-          Call the property line any time, day or night. The assistant records your address, unit, the problem and how to reach you, then gives you a case number before the call ends.
-        </Text>
-        <Button label={`Call ${displayPhone(PMA_PHONE)}`} icon="call" tone="ember" onPress={callLine} />
-        <Text style={s.small}>You'll get a text or email with a status link for your case.</Text>
+        <Button label="Request maintenance" icon="construct" tone="ember" onPress={() => router.push('/request')} />
+        <Text style={s.small}>Or call the property line any time, day or night. The assistant takes the same details and gives you a case number before the call ends.</Text>
+        <Button label={`Call ${displayPhone(PMA_PHONE)}`} icon="call" tone="ghost" onPress={callLine} />
       </Card>
       <EmergencyNote />
 

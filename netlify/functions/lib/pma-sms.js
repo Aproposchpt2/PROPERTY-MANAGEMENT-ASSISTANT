@@ -143,4 +143,35 @@ async function sendEmergencyEscalation({ to, caseNumber, address, description, c
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms };
+// One-time code that confirms a resident's phone before the mobile app files a request.
+// Throws on failure so the caller can tell the resident the code was not sent.
+async function sendVerificationCode({ to, code, env }) {
+  if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) {
+    throw Object.assign(new Error('SMS_NOT_CONFIGURED'), { code: 'SMS_NOT_CONFIGURED' });
+  }
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const params = {
+    to,
+    body: `Desert Ridge Customer Care: your code is ${code}. It expires in 10 minutes. If you did not request it, ignore this message.`,
+  };
+  if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
+    params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+    if (env.PMA_SMS_FROM_NUMBER) params.from = env.PMA_SMS_FROM_NUMBER;
+  } else {
+    params.from = env.PMA_SMS_FROM_NUMBER;
+  }
+  const last4 = String(to).slice(-4);
+  try {
+    const msg = await Promise.race([
+      client.messages.create(params),
+      new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('SMS_TIMEOUT'), { code: 'SMS_TIMEOUT' })), 8000)),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_sms_verify_sent', to_last4: last4, sid: msg.sid }));
+    return { sid: msg.sid };
+  } catch (err) {
+    console.error(JSON.stringify({ event: 'pma_sms_verify_failed', to_last4: last4, code: err.code || err.message }));
+    throw err;
+  }
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms, sendVerificationCode };

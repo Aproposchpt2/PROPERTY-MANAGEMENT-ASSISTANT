@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, EmergencyNote } from '../components/ui';
 import { colors } from '../lib/theme';
+import { MANAGER_ENABLED } from '../lib/config';
 
 export default function Welcome() {
   return (
@@ -13,10 +14,16 @@ export default function Welcome() {
           <Text style={s.title}>Everyone Stays Informed</Text>
           <Text style={s.tag}>Your 24/7 Property Customer Care Center. From incident report to resolution, follow every update in one place.</Text>
         </View>
-        <Button label="I'm a resident" icon="home" tone="ember" onPress={() => router.push('/resident')} />
-        <Text style={s.hint}>Report a maintenance issue or check on a case you already reported.</Text>
-        <Button label="Manager sign in" icon="speedometer" tone="navy" onPress={() => router.push('/manager')} />
-        <Text style={s.hint}>For property owners, managers and administrators with a PMA dashboard account.</Text>
+        <Button label="Request maintenance" icon="construct" tone="ember" onPress={() => router.push('/request')} />
+        <Text style={s.hint}>Tell us what's wrong. You'll get a case number right away, just like calling the Customer Care Center.</Text>
+        <Button label="Check on a request" icon="list" tone="navy" onPress={() => router.push('/resident')} />
+        <Text style={s.hint}>See the status of a request you made in the app or by phone.</Text>
+        {MANAGER_ENABLED ? (
+          <>
+            <Button label="Manager sign in" icon="speedometer" tone="ghost" onPress={() => router.push('/manager')} />
+            <Text style={s.hint}>For property owners, managers and administrators with a PMA dashboard account.</Text>
+          </>
+        ) : null}
         <EmergencyNote />
         <Text style={s.footer}>STELLAR INTELLIGENT SOFTWARE DEVELOPERS · Operated by Apropos Group LLC</Text>
       </ScrollView>

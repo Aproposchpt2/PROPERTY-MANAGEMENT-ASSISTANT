@@ -17,6 +17,7 @@
 
 const crypto = require('node:crypto');
 const { createStore } = require('./lib/cedar-store');
+const { issuePortalLink, escalateEmergency, confirmBySms, confirmByEmail } = require('./lib/pma-intake-flow');
 
 function safeEqual(a, b) {
   const ba = Buffer.from(a);
@@ -93,20 +94,6 @@ function errorResponse(toolCallId, state, reply, envelope = true) {
 
 // Generate a portal token, issue it to the DB, return the full URL or null on failure.
 // The raw token is NEVER logged or returned to ElevenLabs (it appears in transcripts).
-async function issuePortalLink(store, requestId, env) {
-  if (!requestId) return null;
-  try {
-    const rawToken = crypto.randomBytes(16).toString('base64url').slice(0, 22);
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const result = await store.issuePortalToken({ request_id: requestId, token_hash: tokenHash });
-    if (result && result.exists) return null; // live token already exists; don't send a second link
-    return `https://pma.stellaruc.com/status?t=${rawToken}`;
-  } catch (err) {
-    console.error(JSON.stringify({ event: 'cedar_portal_token_failed', error: err?.message }));
-    return null;
-  }
-}
-
 // Return caller asking for a text or email about a case filed earlier from the same phone.
 // Sends the tenant confirmation only: staff were already told when the case was filed.
 async function followupContact({ store, callerNumber, caseNumber, args, env }) {
@@ -121,7 +108,7 @@ async function followupContact({ store, callerNumber, caseNumber, args, env }) {
   let messageRef = null;
   let errorCode = null;
   try {
-    const portalLink = await issuePortalLink(store, result.requestId, env);
+    const portalLink = await issuePortalLink(store, result.requestId);
     const sent = await require(channel[0]).sendCaseConfirmation({ to: args.destination, caseNumber: result.caseNumber, language: result.language, portalLink, env });
     outcome = 'SENT';
     messageRef = sent.sid || sent.id || null;
@@ -250,25 +237,7 @@ async function handle(event, ctx = {}) {
       // Awaited: Lambda freezes background promises when the handler returns,
       // so fire-and-forget never reached Twilio. Awaiting adds ~1s to Ava's
       // response — acceptable for an emergency.
-      if (result && result.urgentReviewRequired && env.PMA_SMS_ENABLED === 'true') {
-        const { sendEmergencyEscalation } = require('./lib/pma-sms');
-        const escalationArgs = {
-          caseNumber: result.caseNumber,
-          address: args.reportedAddress || null,
-          description: args.description || null,
-          callerPhone: caller_number_raw || null,
-          env,
-        };
-        const smsResults = await Promise.allSettled([
-          sendEmergencyEscalation({ to: env.PMA_SMS_MAINTENANCE_NUMBER, ...escalationArgs }),
-          sendEmergencyEscalation({ to: env.PMA_SMS_MANAGER_NUMBER, ...escalationArgs }),
-        ]);
-        smsResults.forEach((r, i) => {
-          if (r.status === 'rejected') {
-            console.error(JSON.stringify({ event: 'cedar_emergency_escalation_failed', index: i, error: r.reason?.message }));
-          }
-        });
-      }
+      await escalateEmergency({ result, args, callerPhone: caller_number_raw, env });
       return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
     }
     if (tool_name === 'record_contact_preference') {
@@ -291,84 +260,9 @@ async function handle(event, ctx = {}) {
       if (args.method !== 'sms' && args.method !== 'email') {
         return respond(result);
       }
-      // ── SMS case confirmation ─────────────────────────────────────────────
-      if (args.method === 'sms') {
-        if (env.PMA_SMS_ENABLED !== 'true') {
-          return respond({ ...result, notificationSent: false, notificationState: 'DISABLED' });
-        }
-        let notificationSent = false;
-        let notificationState = 'FAILED';
-        try {
-          const claim = await store.claimSms({ session_id, call_sid });
-          if (!claim || !claim.success) {
-            return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
-          }
-          const portalLink = await issuePortalLink(store, claim.requestId, env);
-          const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
-          try {
-            const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, portalLink, env });
-            notificationSent = true;
-            notificationState = 'SENT';
-            try {
-              await store.recordSms({ session_id, call_sid, message_sid: sid, outcome: 'SENT', error_code: null });
-            } catch (recErr) {
-              console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
-            }
-          } catch (sendErr) {
-            const smsOutcome = sendErr.code === 21610 || sendErr.twilioCode === 21610 ? 'OPTED_OUT' : 'FAILED';
-            notificationState = smsOutcome;
-            try {
-              await store.recordSms({ session_id, call_sid, message_sid: null, outcome: smsOutcome, error_code: String(sendErr.code || '') });
-            } catch (recErr) {
-              console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
-            }
-          }
-          await Promise.allSettled([
-            sendStaffNotification({ to: env.PMA_SMS_MAINTENANCE_NUMBER, caseNumber: claim.caseNumber, env }),
-            sendStaffNotification({ to: env.PMA_SMS_MANAGER_NUMBER, caseNumber: claim.caseNumber, env }),
-          ]);
-        } catch (smsFlowErr) {
-          console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
-        }
-        return respond({ ...result, notificationSent, notificationState });
-      }
-      // ── Email case confirmation ───────────────────────────────────────────
-      if (env.PMA_EMAIL_ENABLED !== 'true') {
-        return respond({ ...result, notificationSent: false, notificationState: 'DISABLED' });
-      }
-      let notificationSent = false;
-      let notificationState = 'FAILED';
-      try {
-        const claim = await store.claimEmail({ session_id, call_sid });
-        if (!claim || !claim.success) {
-          return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
-        }
-        const portalLinkEmail = await issuePortalLink(store, claim.requestId, env);
-        const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-email');
-        try {
-          const { id } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, portalLink: portalLinkEmail, env });
-          notificationSent = true;
-          notificationState = 'SENT';
-          try {
-            await store.recordEmail({ session_id, call_sid, message_id: id, outcome: 'SENT', error_code: null });
-          } catch (recErr) {
-            console.error(JSON.stringify({ event: 'cedar_email_record_failed', error: recErr?.message }));
-          }
-        } catch (sendErr) {
-          notificationState = 'FAILED';
-          try {
-            await store.recordEmail({ session_id, call_sid, message_id: null, outcome: 'FAILED', error_code: String(sendErr.code || '') });
-          } catch (recErr) {
-            console.error(JSON.stringify({ event: 'cedar_email_record_failed', error: recErr?.message }));
-          }
-        }
-        await Promise.allSettled([
-          sendStaffNotification({ to: env.PMA_EMAIL_MAINTENANCE_ADDRESS, caseNumber: claim.caseNumber, env }),
-          sendStaffNotification({ to: env.PMA_EMAIL_MANAGER_ADDRESS, caseNumber: claim.caseNumber, env }),
-        ]);
-      } catch (emailFlowErr) {
-        console.error(JSON.stringify({ event: 'cedar_email_flow_failed', error: emailFlowErr?.message }));
-      }
+      // ── Case confirmation by text or email (shared with the mobile app) ─────
+      const confirm = args.method === 'sms' ? confirmBySms : confirmByEmail;
+      const { notificationSent, notificationState } = await confirm({ store, session_id, call_sid, env });
       return respond({ ...result, notificationSent, notificationState });
     }
     if (tool_name === 'get_case_status') {

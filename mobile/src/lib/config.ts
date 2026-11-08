@@ -10,3 +10,7 @@ export function displayPhone(e164: string): string {
   const n = d.length === 11 && d.startsWith('1') ? d.slice(1) : d;
   return n.length === 10 ? `(${n.slice(0, 3)}) ${n.slice(3, 6)}-${n.slice(6)}` : e164;
 }
+
+// Phase 1 is the resident maintenance request. The manager screens are built but stay hidden
+// until phase 2; set EXPO_PUBLIC_ENABLE_MANAGER=true to turn them on.
+export const MANAGER_ENABLED = process.env.EXPO_PUBLIC_ENABLE_MANAGER === 'true';
