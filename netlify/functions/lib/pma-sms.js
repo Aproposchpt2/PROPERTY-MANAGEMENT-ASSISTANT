@@ -13,8 +13,11 @@ async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLin
       ? `StellarUC: Su solicitud de mantenimiento fue registrada. Caso #${caseNumber}. En caso de emergencia llame al 911. Frecuencia de mensajes variable. Pueden aplicar tarifas de mensajes y datos. Responda AYUDA para ayuda o STOP para cancelar.${portalLink ? ' ' + portalLink : ''}`
       : `Desert Ridge Customer Care: your maintenance request is on file. Case #${caseNumber}. For emergencies call 911. Reply STOP to opt out.${portalLink ? ' ' + portalLink : ''}`,
   };
+  // With a Messaging Service, also pass From so Twilio always uses PMA's own number from the
+  // sender pool instead of Sticky Sender or area-code geomatch picking another line (2026-11-07).
   if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
     params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+    if (env.PMA_SMS_FROM_NUMBER) params.from = env.PMA_SMS_FROM_NUMBER;
   } else {
     params.from = env.PMA_SMS_FROM_NUMBER;
   }
@@ -50,8 +53,11 @@ async function sendStaffNotification({ to, caseNumber, env }) {
     to,
     body: `Desert Ridge PMA: New maintenance case #${caseNumber} filed. Review in your system for details.`,
   };
+  // With a Messaging Service, also pass From so Twilio always uses PMA's own number from the
+  // sender pool instead of Sticky Sender or area-code geomatch picking another line (2026-11-07).
   if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
     params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+    if (env.PMA_SMS_FROM_NUMBER) params.from = env.PMA_SMS_FROM_NUMBER;
   } else {
     params.from = env.PMA_SMS_FROM_NUMBER;
   }
@@ -115,8 +121,11 @@ async function sendEmergencyEscalation({ to, caseNumber, address, description, c
   const callbackPart = callerPhone ? ` Caller: ${callerPhone}` : '';
   const body = `🚨 EMERGENCY — Desert Ridge PMA: Case #${caseNumber}${addrPart}${descPart}.${callbackPart} Immediate attention required.`;
   const params = { to, body };
+  // With a Messaging Service, also pass From so Twilio always uses PMA's own number from the
+  // sender pool instead of Sticky Sender or area-code geomatch picking another line (2026-11-07).
   if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
     params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+    if (env.PMA_SMS_FROM_NUMBER) params.from = env.PMA_SMS_FROM_NUMBER;
   } else {
     params.from = env.PMA_SMS_FROM_NUMBER;
   }
