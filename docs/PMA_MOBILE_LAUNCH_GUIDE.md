@@ -9,13 +9,18 @@ differentiator, $999/mo platform fee + $0.50/min). No public App Store or Google
 
 | Who | Gets | How |
 |---|---|---|
-| **Managers** (and your staff) | **In-house mobile app**, iPhone and Android, with native alerts | Private install link from Expo (EAS internal distribution); iPhones registered first |
+| **The client's management team** (whatever titles the client uses) | **In-house mobile app**, iPhone and Android, staff-only, with native alerts | Private install link from Expo (EAS internal distribution); iPhones registered first |
 | **Residents** | **Web app** at `pma.stellaruc.com/app` | Link or QR code → Add to Home Screen; nothing to register |
 
 Why the split: Apple only allows in-house iPhone installs on registered devices (up to 100 iPhones
-per year per Apple account), which suits a small manager group but not every resident. It is the same
-app: managers' installs also have the resident screens, and managers can use the web app too (with web
-push alerts) on any device.
+per year per Apple account), which suits a small team but not every resident. The in-house app is
+**staff-only**: it opens on team sign-in and has no resident screens. The team can also use the web app
+(with web push alerts) on any device.
+
+**Built for each client's business:** the app never names a job title; it says "team". Who gets in is
+decided by the client's dashboard accounts (system roles OWNER, ADMIN or MANAGER, assigned to whoever
+the client chooses). Put the client's business name in `mobile/eas.json` → `internal` → `env` →
+`EXPO_PUBLIC_BUSINESS_NAME` before building; it appears on sign-in and the dashboard.
 
 Do the parts in order; each step says how to confirm it worked. Design and background:
 [`PMA_MOBILE_BLUEPRINT_2026-11-08.md`](PMA_MOBILE_BLUEPRINT_2026-11-08.md). What changed:
@@ -26,7 +31,7 @@ Do the parts in order; each step says how to confirm it worked. Design and backg
 | 0 | Database: security fix and web push table | Ava closes sessions again; public functions locked down; browsers can register for alerts |
 | 1 | Netlify: settings, merge, deploy | The app is live at `/app`; website and app endpoints updated |
 | 2 | Residents: test and roll out | Residents request maintenance and follow cases from the app |
-| 3 | Managers: in-house app — accounts, register iPhones, build, install, test | Managers run cases from their phones |
+| 3 | Management team: in-house app — accounts, register iPhones, build, install, test | The team runs cases from their phones |
 | 4 | Manager alerts | Native alerts in the in-house app; web push for managers using the browser |
 | 5 | Hand-off to each customer | Install links, QR codes and a one-page how-to |
 
@@ -159,7 +164,7 @@ select relrowsecurity from pg_class where relname = 'pma_web_push_subscriptions'
 
 ---
 
-## Part 3 — Managers: in-house app
+## Part 3 — Management team: in-house app (staff-only)
 
 ### 3.1 Sign-in email (once)
 
@@ -214,7 +219,7 @@ npx eas-cli@latest build --profile internal --platform all
 
 ### 3.5 Test with a manager account
 
-Open **PMA** → **Manager sign in**.
+Open **PMA**: it goes straight to **Team Sign In** (no resident screens in this app).
    - [ ] Email → code → signed in; counts match the web dashboard; filters work.
    - [ ] Open a case → **Assign provider** → provider, Tomorrow, a window, a work order → Assign.
    - [ ] Type an update, leave **Also send this update to the resident** ticked → Save → resident receives it;

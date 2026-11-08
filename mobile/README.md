@@ -2,7 +2,7 @@
 
 Expo (SDK 58) + Expo Router + TypeScript. Part of the PMA delivery package, no public store listing:
 
-- **Managers:** in-house iPhone/Android app from private install links (`eas.json` profile `internal`):
+- **Management team** (staff-only; no job titles assumed): in-house iPhone/Android app from private install links (`eas.json` profile `internal`, `EXPO_PUBLIC_APP_MODE=staff`, client name in `EXPO_PUBLIC_BUSINESS_NAME`):
   `npx eas-cli@latest build --profile internal --platform all` (setup: launch guide, Part 3).
 - **Residents:** web app at `https://pma.stellaruc.com/app`, added to the home screen.
 

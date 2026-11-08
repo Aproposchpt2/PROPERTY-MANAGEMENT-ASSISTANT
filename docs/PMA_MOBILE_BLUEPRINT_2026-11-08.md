@@ -30,7 +30,14 @@ providers, answer cost approvals and send updates to residents.
   be registered first (up to 100 per year per Apple account).
 - **Residents: web app** at `pma.stellaruc.com/app`, added to the home screen; nothing to register.
   Managers can also use it on any device, with web push alerts.
-- One codebase (Expo) for both; the in-house app also contains the resident screens.
+- One codebase (Expo) for both. The in-house app is **staff-only** (`EXPO_PUBLIC_APP_MODE=staff`): it opens
+  on team sign-in and has no resident screens.
+- **Built for each client's business:** the app never names a job title ("team", not "manager"); access
+  comes from the client's dashboard accounts (system roles OWNER/ADMIN/MANAGER, assigned to whoever the
+  client chooses). `EXPO_PUBLIC_BUSINESS_NAME` puts the client's name on sign-in and the dashboard.
+- **Still client-specific on the server:** texts and emails say "Desert Ridge Customer Care" /
+  "Desert Ridge PMA" (`lib/pma-sms.js`, `lib/pma-email.js`). Make this a per-client setting before a
+  second client goes live.
 - **Price:** $999/mo platform fee (app included) + $0.50/min usage
   (`PMA_MULTI_SUBSCRIBER_BILLING.md`).
 - Launch steps: [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md) (Part 3 for the in-house app).

@@ -10,6 +10,7 @@ import { Button, Centered, PriorityBadge, StatusBadge } from '../../components/u
 import { colors } from '../../lib/theme';
 import { registerForPush, unregisterPush } from '../../lib/push';
 import { unregisterWebPush } from '../../lib/webpush';
+import { BUSINESS_NAME } from '../../lib/config';
 
 let pushRegistered = false; // once per app session and sign-in
 
@@ -73,7 +74,7 @@ export default function ManagerDashboard() {
         <Ionicons name="lock-closed" size={40} color={colors.muted} />
         <Text style={s.centerText}>
           {error.status === 403
-            ? `${session?.user.email ?? 'This account'} does not have manager access to this property. Ask an owner or administrator to add you.`
+            ? `${session?.user.email ?? 'This account'} does not have access to this property's team dashboard. Ask your account owner or administrator to add you.`
             : error.message}
         </Text>
         <Button label="Sign out" tone="navy" onPress={signOut} />
@@ -92,7 +93,7 @@ export default function ManagerDashboard() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         ListHeaderComponent={
           <>
-            <Text style={s.eyebrow}>PROPERTY MANAGEMENT ASSISTANT</Text>
+            <Text style={s.eyebrow}>{BUSINESS_NAME ? BUSINESS_NAME.toUpperCase() : 'PROPERTY MANAGEMENT ASSISTANT'}</Text>
             <Text style={s.subtitle}>Monitor incidents, prioritize response and keep everyone updated.</Text>
             {error ? <Text style={s.error}>{error.message} Pull down to retry.</Text> : null}
             <View style={s.metrics}>

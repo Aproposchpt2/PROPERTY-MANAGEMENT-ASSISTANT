@@ -31,7 +31,7 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false): P
   if (!res.ok) {
     const fallback =
       res.status === 401 ? 'Please sign in again.' :
-      res.status === 403 ? 'This account does not have manager access.' :
+      res.status === 403 ? 'This account does not have access to the team dashboard.' :
       res.status === 404 ? 'Not found.' :
       res.status === 429 ? 'Too many requests. Wait a minute and try again.' :
       'Something went wrong. Try again.';

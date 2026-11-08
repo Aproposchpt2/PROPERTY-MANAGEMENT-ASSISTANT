@@ -18,6 +18,13 @@ export function displayPhone(e164: string): string {
   return n.length === 10 ? `(${n.slice(0, 3)}) ${n.slice(3, 6)}-${n.slice(6)}` : e164;
 }
 
-// Manager screens. On for the web app delivered with the package (netlify.toml); a phone build
-// can still leave them off.
-export const MANAGER_ENABLED = process.env.EXPO_PUBLIC_ENABLE_MANAGER === 'true';
+// The in-house app is for the client's management team only (EXPO_PUBLIC_APP_MODE=staff in
+// eas.json): it opens on team sign-in and has no resident screens. The web app at /app keeps both.
+export const STAFF_APP = process.env.EXPO_PUBLIC_APP_MODE === 'staff';
+
+// Team (management) screens. Always on in the staff app; on for the web app via netlify.toml.
+export const MANAGER_ENABLED = STAFF_APP || process.env.EXPO_PUBLIC_ENABLE_MANAGER === 'true';
+
+// The client's business name, shown on sign-in and the dashboard. Each client decides their own
+// titles, so the app never names a role ("manager" etc.); it says "team".
+export const BUSINESS_NAME = (process.env.EXPO_PUBLIC_BUSINESS_NAME ?? '').trim();

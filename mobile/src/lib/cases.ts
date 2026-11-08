@@ -130,7 +130,7 @@ const EVENT_LABELS: Record<string, string> = {
   nte_approval_requested: 'Cost approval requested',
   nte_approval_response: 'Cost approval answered',
   nte_auto_approved: 'Work pre-approved',
-  mgr_approval_response: 'Manager approval answered',
+  mgr_approval_response: 'Approval answered by the team',
   resident_update_sent: 'Update sent to resident',
 };
 export function eventLabel(eventType: string): string {

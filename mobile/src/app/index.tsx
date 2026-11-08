@@ -20,8 +20,8 @@ export default function Welcome() {
         <Text style={s.hint}>See the status of a request you made in the app or by phone.</Text>
         {MANAGER_ENABLED ? (
           <>
-            <Button label="Manager sign in" icon="speedometer" tone="ghost" onPress={() => router.push('/manager')} />
-            <Text style={s.hint}>For property owners, managers and administrators with a PMA dashboard account.</Text>
+            <Button label="Team sign in" icon="speedometer" tone="ghost" onPress={() => router.push('/manager')} />
+            <Text style={s.hint}>For the property management team, with a dashboard account.</Text>
           </>
         ) : null}
         <EmergencyNote />

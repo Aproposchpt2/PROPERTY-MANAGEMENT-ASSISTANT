@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Button, Label } from '../../components/ui';
 import { colors } from '../../lib/theme';
 import { showMessage } from '../../lib/dialog';
+import { BUSINESS_NAME } from '../../lib/config';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,8 +39,9 @@ export default function ManagerLogin() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
+        {BUSINESS_NAME ? <Text style={s.business}>{BUSINESS_NAME}</Text> : null}
         <Text style={s.brand}>PROPERTY MANAGEMENT ASSISTANT</Text>
-        <Text style={s.tag}>Sign in with the email on your Management Dashboard account. We'll email you a sign-in code.</Text>
+        <Text style={s.tag}>Team sign in. Use the email on your dashboard account; we'll email you a sign-in code.</Text>
         <Label>EMAIL</Label>
         <TextInput
           style={s.input}
@@ -79,6 +81,7 @@ export default function ManagerLogin() {
 
 const s = StyleSheet.create({
   wrap: { padding: 24, gap: 12, paddingTop: 32 },
+  business: { fontSize: 26, fontWeight: '800', color: colors.navy },
   brand: { fontSize: 22, fontWeight: '800', color: colors.navy },
   tag: { fontSize: 15, lineHeight: 22, color: '#52606D', marginBottom: 8 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field, padding: 15, borderRadius: 12, fontSize: 16 },

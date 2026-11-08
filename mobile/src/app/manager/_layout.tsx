@@ -1,5 +1,5 @@
 import { Redirect, Stack } from 'expo-router';
-import { MANAGER_ENABLED } from '../../lib/config';
+import { MANAGER_ENABLED, STAFF_APP } from '../../lib/config';
 import { useSession } from '../../lib/session';
 import { Centered } from '../../components/ui';
 import { ActivityIndicator } from 'react-native';
@@ -22,10 +22,10 @@ export default function ManagerLayout() {
       }}
     >
       <Stack.Protected guard={!session}>
-        <Stack.Screen name="login" options={{ title: 'Manager Sign In' }} />
+        <Stack.Screen name="login" options={{ title: 'Team Sign In', headerBackVisible: !STAFF_APP }} />
       </Stack.Protected>
       <Stack.Protected guard={!!session}>
-        <Stack.Screen name="index" options={{ title: 'Manager Dashboard' }} />
+        <Stack.Screen name="index" options={{ title: 'Dashboard', headerBackVisible: !STAFF_APP }} />
         <Stack.Screen name="[id]" options={{ title: 'Case' }} />
         <Stack.Screen name="assign" options={{ title: 'Assign Provider' }} />
         <Stack.Screen name="alerts" options={{ title: 'Alerts' }} />

@@ -251,3 +251,26 @@ app at `/app`. Same codebase; Expo stays.
 Verified: iPhone and Android bundles build with the manager screens on and point at
 `https://pma.stellaruc.com`; `eas.json` and `app.json` are valid. **Not done:** an actual EAS build
 (needs your Expo account, Apple Developer account and Firebase project).
+
+---
+
+## 11. Staff-only in-house app, built for each client (later on 2026-11-08)
+
+**Decision:** the in-house app is for the client's management team only. Residents keep the web app
+at `/app`. The app must not assume job titles: each client decides who manages and what they're
+called; access stays with the system roles OWNER/ADMIN/MANAGER on the client's dashboard accounts.
+
+| File | Change |
+|---|---|
+| `mobile/src/lib/config.ts` | `STAFF_APP` (`EXPO_PUBLIC_APP_MODE=staff`), `BUSINESS_NAME` (`EXPO_PUBLIC_BUSINESS_NAME`) |
+| `mobile/src/app/_layout.tsx` | Resident screens guarded off in the staff app; it opens on team sign-in |
+| `mobile/src/app/manager/_layout.tsx`, `login.tsx`, `index.tsx`, `src/app/index.tsx`, `src/lib/api.ts`, `src/lib/cases.ts` | Neutral wording ("Team Sign In", "Dashboard", "team dashboard", "Approval answered by the team"); client business name on sign-in and dashboard |
+| `mobile/eas.json` | `internal` profile: `EXPO_PUBLIC_APP_MODE=staff`, `EXPO_PUBLIC_BUSINESS_NAME` (set per client) |
+| Docs | Launch guide, blueprint updated |
+
+Verified: staff build sends every route, including resident ones, to team sign-in with the business
+name shown; the regular web app's resident and team flows unchanged (full browser walkthrough);
+root suite 187/187, mobile 16/16, typecheck clean.
+
+**Open:** server texts and emails still say "Desert Ridge" (`lib/pma-sms.js`, `lib/pma-email.js`); make it
+a per-client setting before a second client goes live.
