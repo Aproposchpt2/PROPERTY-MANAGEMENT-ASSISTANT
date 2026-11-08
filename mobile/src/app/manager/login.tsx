@@ -51,7 +51,7 @@ export default function ManagerLogin() {
           textContentType="emailAddress"
           placeholder="you@company.com"
           value={email}
-          onChangeText={v => { setEmail(v); setSent(false); }}
+          onChangeText={v => { if (v.trim().toLowerCase() !== email.trim().toLowerCase()) setSent(false); setEmail(v); }}
           accessibilityLabel="Email"
         />
         {!sent ? (
