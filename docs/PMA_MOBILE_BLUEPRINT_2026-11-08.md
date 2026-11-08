@@ -217,7 +217,8 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
    Check a declined approval and an assignment with and without a visit time.
 9. **Build:** `EXPO_PUBLIC_ENABLE_MANAGER=true` for the release that includes managers.
 10. **Turn on manager push notifications** (built):
-    1. Apply `supabase/migrations/20261108100000_pma_push_tokens.sql` (rollback file alongside).
+    1. ~~Apply `supabase/migrations/20261108100000_pma_push_tokens.sql`~~ Applied to the live project
+       2026-11-08 (rollback file alongside).
     2. In `mobile/`: `npx eas-cli@latest init` (writes the EAS project id into `app.json`; push tokens need it).
     3. Android: add Firebase (FCM) credentials to the EAS project (`eas credentials`). iOS: EAS creates the
        push key during the first iOS build.
