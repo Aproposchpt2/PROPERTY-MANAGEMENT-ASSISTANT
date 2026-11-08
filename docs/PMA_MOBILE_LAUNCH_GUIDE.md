@@ -37,6 +37,31 @@ Do the parts in order; each step says how to confirm it worked. Design and backg
 
 ---
 
+## Fast path — launch the staff mobile app only
+
+Everything below is the minimum to get the in-house app onto the management team's phones. The
+resident web app, web push and the security SQL can follow later (Parts 0, 2 and 4 web sections).
+
+| # | Step | Where | Done |
+|---|---|---|---|
+| 1 | Merge `claude/new-session-ykm5xi` into `main`; wait for Netlify **Published** (the alerts, "send update to resident" and approval fields live in this branch) | GitHub, Netlify | ☐ |
+| 2 | Netlify env var `PMA_PUSH_ENABLED` = `true`, then **Trigger deploy** | Netlify | ☐ |
+| 3 | Supabase → Authentication → Emails → **Magic Link** contains `{{ .Token }}` (sign-in code) | Supabase | ☐ |
+| 4 | `cd mobile && npm install && npx eas-cli@latest login && npx eas-cli@latest init` → commit the updated `app.json` | Your computer | ☐ |
+| 5 | Put the client's name in `mobile/eas.json` → `internal.env.EXPO_PUBLIC_BUSINESS_NAME` → commit | Repo | ☐ |
+| 6 | Android alerts: Firebase project → Android app `com.stellar.pma` → `google-services.json` into `mobile/` + `"googleServicesFile": "./google-services.json"` under `android` in `app.json`; service-account key → `npx eas-cli@latest credentials` (3.2) | Firebase, your computer | ☐ |
+| 7 | Join the **Apple Developer Program** ($99/yr) | developer.apple.com | ☐ |
+| 8 | `npx eas-cli@latest device:create` → send the link to each team member's iPhone → they install the profile (3.3) | Your computer, their iPhones | ☐ |
+| 9 | `npx eas-cli@latest build --profile internal --platform all` → sign in to Apple when asked; say **yes** to certificates, profile and push key (3.4) | Your computer | ☐ |
+| 10 | Send the install links; iPhone: Developer Mode on (Settings → Privacy & Security), Android: allow the install | Team phones | ☐ |
+| 11 | Each person signs in with their dashboard email + code → **Allow** notifications → Alerts → **Send a test notification** | Team phones | ☐ |
+| 12 | Test: one case update with "send to resident", one provider assignment, one approval, one test request by phone call (new-case alert) | Team phones | ☐ |
+
+Who can sign in: anyone with an active dashboard account (OWNER, ADMIN, or MANAGER with access to
+the property) — whatever title the client gives them.
+
+---
+
 ## What you need
 
 - [ ] Supabase dashboard access to project `vqrqyanqsiqzsmlhytaz`
