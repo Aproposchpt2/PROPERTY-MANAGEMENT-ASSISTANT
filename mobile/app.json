@@ -22,7 +22,13 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "output": "single",
+      "name": "Property Management Assistant",
+      "description": "Request maintenance, follow your case, and manage property incidents.",
+      "themeColor": "#071B33"
+    },
+    "experiments": {
+      "baseUrl": "/app"
     },
     "plugins": [
       "expo-router",

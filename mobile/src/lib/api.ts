@@ -94,6 +94,23 @@ export async function removePushToken(token: string) {
   return request<{ success: boolean }>('/api/manager/push-token', { method: 'DELETE', body: JSON.stringify({ token }) }, true);
 }
 
+// Web push (managers using the web app).
+export async function getWebPushKey() {
+  return request<{ success: boolean; publicKey: string | null; enabled: boolean }>('/api/manager/web-push', {}, true);
+}
+
+export async function registerWebPush(subscription: unknown, prefs?: PushPrefs) {
+  return request<{ success: boolean; prefs: PushPrefs; enabled: boolean }>(
+    '/api/manager/web-push',
+    { method: 'POST', body: JSON.stringify({ subscription, ...(prefs ? { prefs } : {}) }) },
+    true,
+  );
+}
+
+export async function removeWebPush(endpoint: string) {
+  return request<{ success: boolean }>('/api/manager/web-push', { method: 'DELETE', body: JSON.stringify({ endpoint }) }, true);
+}
+
 export async function sendTestPush() {
   return request<{ success: boolean; state: string }>('/api/manager/push-test', { method: 'POST', body: '{}' }, true);
 }

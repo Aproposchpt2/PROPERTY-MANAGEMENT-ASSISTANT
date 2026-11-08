@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiError, answerApproval, getCase, updateCase, type CasePatch } from '../../lib/api';
 import { CASE_STATUSES, eventLabel, formatMoney, formatWhen, isUrgent, needsApproval, savedMessage, type CaseDetail } from '../../lib/cases';
 import { Button, Card, Centered, Label, PriorityBadge, StatusBadge } from '../../components/ui';
 import { colors } from '../../lib/theme';
+import { confirmAction, showMessage } from '../../lib/dialog';
 
 const MAX_TENANT_UPDATE = 1000;   // matches the pma_maintenance_requests check constraints
 const MAX_INTERNAL_NOTES = 4000;
@@ -63,35 +64,35 @@ export default function CaseWorkspace() {
       const body: CasePatch = canNotify && notify && residentReachable ? { ...patch, notify_resident: true } : patch;
       const r = await updateCase(c.id, body);
       await load();
-      Alert.alert('Saved', savedMessage(!!patch.tenant_update, r.notification));
+      showMessage('Saved', savedMessage(!!patch.tenant_update, r.notification));
     } catch (e) {
-      Alert.alert('Update failed', e instanceof ApiError ? e.message : 'Try again.');
+      showMessage('Update failed', e instanceof ApiError ? e.message : 'Try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  function confirmApproval(response: 'APPROVED' | 'DECLINED') {
+  async function confirmApproval(response: 'APPROVED' | 'DECLINED') {
     if (!c) return;
     const verb = response === 'APPROVED' ? 'Approve' : 'Decline';
-    Alert.alert(`${verb} ${formatMoney(c.nteAmount)}?`, response === 'APPROVED'
-      ? 'The provider can go ahead. A proposed visit time is confirmed and the case moves to Scheduled.'
-      : 'The provider is told the work is not approved.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: verb, style: response === 'DECLINED' ? 'destructive' : 'default', onPress: async () => {
-          setAnswering(true);
-          try {
-            await answerApproval(c.id, response);
-            await load(false);
-          } catch (e) {
-            Alert.alert('Not recorded', e instanceof ApiError ? e.message : 'Try again.');
-          } finally {
-            setAnswering(false);
-          }
-        },
-      },
-    ]);
+    const ok = await confirmAction(
+      `${verb} ${formatMoney(c.nteAmount)}?`,
+      response === 'APPROVED'
+        ? 'The work is approved. If the provider proposed a visit time, it is confirmed and the case moves to Scheduled.'
+        : 'The quote is marked declined. Contact the provider about next steps.',
+      verb,
+      response === 'DECLINED',
+    );
+    if (!ok) return;
+    setAnswering(true);
+    try {
+      await answerApproval(c.id, response);
+      await load(false);
+    } catch (e) {
+      showMessage('Not recorded', e instanceof ApiError ? e.message : 'Try again.');
+    } finally {
+      setAnswering(false);
+    }
   }
 
   const urgent = isUrgent(c.priority);

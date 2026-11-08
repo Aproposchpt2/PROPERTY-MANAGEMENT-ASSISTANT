@@ -19,8 +19,19 @@ emergency escalation, staff alerts, text or email confirmation and status link. 
 can then follow the request in the app.
 
 **Phase 2 is the manager app** (section 2A): managers work cases from their phone, assign
-providers, answer cost approvals and send updates to residents. It is built and switched on
-per build with `EXPO_PUBLIC_ENABLE_MANAGER=true`, so the phase 1 resident release can ship first.
+providers, answer cost approvals and send updates to residents.
+
+### Delivery and pricing (decided 2026-11-08)
+
+- **No App Store.** The app is part of the delivery package and the differentiator. It ships as a
+  **web app** at `pma.stellaruc.com/app` that residents and managers add to their home screen; it
+  then opens full screen with the PMA icon. Nothing to download from a store; no Apple review.
+- **Price:** $999/mo platform fee (app included) + $0.50/min usage
+  (`PMA_MULTI_SUBSCRIBER_BILLING.md`).
+- **Manager alerts** use standard web push (section 2A). iPhone needs iOS 16.4+ and the app opened
+  from the Home Screen.
+- The same code still builds native iPhone/Android apps with native push if ever needed
+  (launch guide, appendix); that path is optional and not part of the delivery.
 
 ---
 
@@ -123,9 +134,23 @@ Adding or editing providers and pre-approval limits stays on the web dashboard.
 - **Switch:** nothing is sent unless `PMA_PUSH_ENABLED=true`. Lock-screen text mirrors the existing staff
   texts: case number and unit for new cases; address and a short description for emergencies.
 
+**Web push (the delivered web app).** Every alert above also goes to managers' browsers, under the same
+recipient rules and per-device switches:
+
+- **Browser side:** `public/sw.js` (service worker, scope `/app/`) shows the alert and, on tap, opens
+  `/app/manager/<case id>`. Emergencies stay on screen until dismissed. The **Alerts** screen shows
+  **Turn on alerts** (browsers only ask for permission after a tap), then the same switches and test.
+  On iPhone it first explains Add to Home Screen when opened in Safari.
+- **Server side:** `GET /api/manager/web-push` (public key), `POST` (register subscription and
+  preferences), `DELETE` (sign-out); sending with the `web-push` library and VAPID keys
+  (`PMA_WEB_PUSH_PUBLIC_KEY`, `PMA_WEB_PUSH_PRIVATE_KEY`, `PMA_WEB_PUSH_SUBJECT`). A 404/410 from the
+  push service switches that subscription off. Without the keys, browsers are skipped and phones/texts
+  carry on.
+- **Storage:** `pma_web_push_subscriptions` (migration `20261108120000`): RLS on, service role only.
+
 Approve/Decline uses the existing `POST /cases/:id/approve` (`pma_mgr_approve_case_v1`, live in
 Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the existing
-`POST /cases/:id/assign`. The only database change in phase 2 is the push token table.
+`POST /cases/:id/assign`. Database additions for alerts: the phone token and web push tables.
 
 ---
 
@@ -136,8 +161,11 @@ Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the
 | Client | Expo SDK 58, React Native 0.88, Expo Router (`mobile/src/app`), TypeScript (strict) |
 | Data | PMA Netlify APIs at `pma.stellaruc.com`; no direct table access from the app |
 | Database | Supabase `vqrqyanqsiqzsmlhytaz`; existing `pma_*` tables and RPCs, unchanged |
-| Deep link | `pma://status?t=TOKEN` opens a resident's case |
-| Platforms | iOS, Android; Expo web kept for development only |
+| Deep link | `pma://status?t=TOKEN` opens a resident's case (native builds) |
+| Delivery | **Web app** at `pma.stellaruc.com/app` (Expo web export, `experiments.baseUrl: "/app"`), built by Netlify on each deploy (`scripts/build-web-app.sh` → `./app`, git-ignored). Installable: `public/manifest.webmanifest`, PMA icons, `public/index.html`. Same-origin API calls |
+| Storage | Phones: SecureStore. Web: the browser's localStorage (`src/lib/storage.ts`) |
+| Dialogs | `src/lib/dialog.ts`: browser dialogs on the web (React Native's Alert does nothing there), native alerts on phones |
+| Native builds | iOS/Android still build from the same code (optional; launch guide appendix) |
 
 | File | Screen | Phase |
 |---|---|---|
@@ -148,7 +176,7 @@ Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the
 | `src/app/manager/login.tsx`, `index.tsx` | Manager sign-in, dashboard | 2 |
 | `src/app/manager/[id].tsx` | Case: approval, provider, status, resident update, notes, timeline | 2 |
 | `src/app/manager/assign.tsx` | Assign provider and visit window | 2 |
-| `src/app/manager/alerts.tsx` | Push alert switches and test notification | 2 |
+| `src/app/manager/alerts.tsx` | Alerts: Turn on (web), switches, test notification | 2 |
 
 Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/test/`).
 
@@ -184,61 +212,43 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
   channel and data; dead-token switch-off; Expo outage; replay skip; registration, shared phones, removal
   and test push; 2 route tests); mobile **16/16**. Android bundle builds with notifications; the web build
   loads (notifications are skipped in a browser) and the resident flow is unchanged.
-- **Not yet done:** real device, real texts, real push delivery, a real case in Supabase.
+- **Web app delivery:** root suite **187/187** (6 web push tests: phones and browsers under the same rules,
+  keys-missing skip, 410 switch-off, missing table never blocks phones, subscription validation, test push);
+  mobile **16/16**. `scripts/build-web-app.sh` builds `./app` in ~15 s locally. End-to-end in Chromium against
+  the repo served like Netlify (`/app` fallback) with a mocked API: `/app` → `/app/`, manifest linked,
+  resident request → status, details and recent case remembered in the browser, manager dashboard, Approve
+  through a real confirmation dialog, Alerts → Turn on → service worker at `/app/` → 65-byte server key →
+  subscription posted → switches shown. (Headless Chrome reports notification permission as denied and
+  has no push service, so permission and subscription were stood in for in that one test.)
+- **Not yet done:** real devices, real texts, real push delivery, a real case in Supabase.
 
 ---
 
 ## 6. Next Steps
 
-### Phase 1 — Launch the resident maintenance request
+### Launch (phases 1 and 2 together, as a web app)
 
-1. **Set the secret in Netlify:** `PMA_APP_VERIFY_SECRET` = a random value of at least 32 characters
-   (for example `openssl rand -base64 48`). Without it the app sends residents to the phone line.
-   Deploy, then file one test request from a phone and confirm it in the web Management Dashboard.
+1. Follow [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md) Parts 0–5: database fix and web push
+   table, Netlify settings (`PMA_APP_VERIFY_SECRET`, VAPID keys, `PMA_PUSH_ENABLED`), merge, test residents
+   and managers on real devices, turn on alerts, hand-off to each customer.
 2. **Mark app requests as app requests.** The create RPC records `source_channel = 'voice'` and
    `callerAssertedIdentity`. Add a small migration so app requests read `app` and `phone_verified`;
    until then they look like calls in the dashboard.
-3. **Device test** in Expo Go on iPhone and Android: text and email confirmations, Spanish,
-   an emergency wording (e.g. "gas smell") reaching the maintenance and manager lines, a wrong code,
-   an expired code, and the status link opening in the app.
-4. **Branding:** replace the Expo placeholder icon, adaptive icon and splash in `mobile/assets`.
-5. **Store release:** `eas init` and `eas.json` (preview, production); `EXPO_PUBLIC_*` values as EAS
-   environment variables; Apple Developer and Google Play accounts; privacy labels (name, phone,
-   email, address collected to provide the service); update `privacy.html` and `terms.html` to cover
-   the app; TestFlight and Play internal testing; submit.
-6. **Global rate limit (before wide release):** move the per-number and per-code limits into
+3. **Global rate limit (before wide release):** move the per-number and per-code limits into
    Supabase so they hold across server instances.
-
-### Phase 2 — Manager app (built; launch steps)
-
-7. **Sign-in email:** confirm the Supabase "Magic Link" template includes `{{ .Token }}` so managers get a code.
-8. **Device test with real accounts:** a manager (sees cases, saves, assigns, approves), a signed-in
-   non-manager (access message only), and "send to resident" by text and by email on a test case.
-   Check a declined approval and an assignment with and without a visit time.
-9. **Build:** `EXPO_PUBLIC_ENABLE_MANAGER=true` for the release that includes managers.
-10. **Turn on manager push notifications** (built):
-    1. ~~Apply `supabase/migrations/20261108100000_pma_push_tokens.sql`~~ Applied to the live project
-       2026-11-08 (rollback file alongside).
-    2. In `mobile/`: `npx eas-cli@latest init` (writes the EAS project id into `app.json`; push tokens need it).
-    3. Android: add Firebase (FCM) credentials to the EAS project (`eas credentials`). iOS: EAS creates the
-       push key during the first iOS build.
-    4. Build a development or preview build (`eas build --profile development`). Remote push does not work
-       in Expo Go on Android.
-    5. Netlify: `PMA_PUSH_ENABLED=true`; optionally `EXPO_ACCESS_TOKEN` if "enhanced push security" is
-       turned on for the EAS project. Deploy.
-    6. Sign in on a phone, allow notifications, use **Send a test notification**, then file a test request
-       (normal and emergency wording) and a test quote over the limit.
-11. **Bring the repo in line with the live database:** add a migration capturing
-    `pma_mgr_approve_case_v1` as deployed, and remove or rename the unused 4-argument case functions
-    in `20261029110000_pma_approval_rpcs.sql`, which differ from what is live.
+4. **Privacy and terms:** update `privacy.html` and `terms.html` to cover the app.
+5. **Customer hand-off kit:** QR code and one-page how-to per property (launch guide, Part 5).
+6. **Bring the repo in line with the live database:** add a migration capturing
+   `pma_mgr_approve_case_v1` as deployed, and remove or rename the unused 4-argument case functions
+   in `20261029110000_pma_approval_rpcs.sql`, which differ from what is live.
 
 ### Phase 3 — Richer requests
 
-12. Photos (private Supabase Storage bucket, signed upload URLs from the API).
-13. Resident push notifications for status changes.
-14. Multiple properties: the API is scoped to one `PMA_PROPERTY_ID`; add property selection aligned with
-    `PMA_MULTI_SUBSCRIBER_BILLING.md`.
-15. Offline retry, screen-reader and large-text QA, Spanish screens.
+7. Photos (private Supabase Storage bucket, signed upload URLs from the API).
+8. Resident push notifications for status changes (web push, as for managers).
+9. Multiple properties: the API is scoped to one `PMA_PROPERTY_ID`; add property selection aligned with
+   `PMA_MULTI_SUBSCRIBER_BILLING.md`. Needed before one deployment serves several customers.
+10. Offline retry, screen-reader and large-text QA, Spanish screens.
 
 ---
 
@@ -249,11 +259,12 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Netlify | `PMA_APP_VERIFY_SECRET` | **New.** Random, ≥ 32 characters. Signs phone-check codes |
 | Netlify | `PMA_SMS_ENABLED`, `PMA_EMAIL_ENABLED` | Existing; same meaning as for calls |
 | Netlify | `PMA_SMS_FROM_NUMBER`, `PMA_SMS_MESSAGING_SERVICE_SID`, Twilio keys | Existing; codes are sent from PMA's line |
-| Netlify | `PMA_PUSH_ENABLED` | **New.** `true` to send manager push notifications |
-| Netlify | `EXPO_ACCESS_TOKEN` | **New, optional.** Only if enhanced push security is on for the EAS project |
-| App | `EXPO_PUBLIC_PMA_API_BASE` | `https://pma.stellaruc.com` |
-| App | `EXPO_PUBLIC_PMA_PHONE` | Property line shown to residents |
-| App | `EXPO_PUBLIC_ENABLE_MANAGER` | `false` for the phase 1 resident release; `true` once managers are included |
+| Netlify | `PMA_PUSH_ENABLED` | **New.** `true` to send manager alerts |
+| Netlify | `PMA_WEB_PUSH_PUBLIC_KEY`, `PMA_WEB_PUSH_PRIVATE_KEY` | **New.** VAPID keys (`npx web-push generate-vapid-keys`); private key is a secret |
+| Netlify | `PMA_WEB_PUSH_SUBJECT` | **New.** `mailto:` contact address for push services |
+| Netlify | `EXPO_ACCESS_TOKEN` | Optional; native builds only, with enhanced push security |
+| `netlify.toml` | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_PMA_PHONE`, `EXPO_PUBLIC_ENABLE_MANAGER="true"` | Public values compiled into the web app (committed; never secrets) |
+| Native builds | `EXPO_PUBLIC_PMA_API_BASE` | `https://pma.stellaruc.com` (the web app uses same-origin URLs) |
 
 ---
 
@@ -262,12 +273,11 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Item | Notes |
 |---|---|
 | App requests labelled as voice | Step 2 above |
-| Rate limits per instance | Step 6 above |
-| Single property | Inherited from the voice path (`PMA_TENANT_ID`, `PMA_PROPERTY_ID`) |
-| Repo vs live approval functions | `pma_mgr_approve_case_v1` exists only in the live database; the repo's 4-argument case functions are not what is live (step 11) |
-| Push needs setup outside the code | EAS project id, FCM credentials, the token table and `PMA_PUSH_ENABLED` (step 10) |
-| Push receipts | Only Expo's immediate tickets are checked; later delivery receipts (e.g. Apple or Google rejecting a message) are not polled |
-| iOS critical alerts | Emergencies use normal iOS alerts; bypassing silent mode needs an Apple entitlement |
-| Approve/Decline on Expo web | Confirmation pop-ups don't show in a browser build; managers on a computer use `manager.html` |
-| Expo web against production | APIs send no CORS headers; web is for layout checks only |
+| Rate limits per instance | Step 3 above |
+| Single property | Inherited from the voice path (`PMA_TENANT_ID`, `PMA_PROPERTY_ID`); step 9 before serving several customers from one deployment |
+| Repo vs live approval functions | `pma_mgr_approve_case_v1` exists only in the live database; the repo's 4-argument case functions are not what is live (step 6) |
+| Web push on iPhone | Only for PMA opened from the Home Screen, iOS 16.4+; the Alerts screen explains this. Staff texts are unchanged |
+| Web push delivery | Browsers' push services may delay or drop alerts when a device is asleep or offline; staff texts remain the guaranteed channel for emergencies |
+| Netlify build step | Deploys now build the web app; if that build fails, the deploy fails and the previous one stays live |
+| iOS critical alerts | Emergencies use normal alerts; bypassing silent mode needs an Apple entitlement (native app only) |
 | `npx expo install` online check | Blocked in the cloud build environment; run `npx expo install --check` on a developer machine |

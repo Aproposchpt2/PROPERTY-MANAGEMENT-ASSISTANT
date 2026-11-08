@@ -19,7 +19,9 @@ checklist is [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md).
 | Push | Manager push notifications for emergencies, new cases, cost approvals | In repo; table **applied live**; needs EAS setup and `PMA_PUSH_ENABLED=true` |
 | Website | `manager.html`: "Also send this update to the resident"; approval badges now show | In repo |
 | Security | Stray public close-session function; public support-intake function | Fix in repo; **not yet applied live** |
-| Docs | Blueprint, this record, original handoff | In repo |
+| **Delivery** | **No App Store: web app at `pma.stellaruc.com/app`, built by Netlify on deploy; manager alerts by web push** (section 9) | In repo; web push table **not yet applied**; needs VAPID keys |
+| **Pricing** | $999/mo platform fee (app included) + $0.50/min | `PMA_MULTI_SUBSCRIBER_BILLING.md` |
+| Docs | Blueprint, launch guide, this record, original handoff | In repo |
 
 Nothing reaches production until the branch is merged and Netlify deploys, except the
 database change marked **applied live** in section 4.
@@ -37,7 +39,9 @@ database change marked **applied live** in section 4.
 | `da5d412` | Manager push notifications: emergencies, new cases, cost approvals |
 | `cc871b6` | Blueprint: push token table applied to the live database |
 | `7d61e3b` | Fix two public Supabase functions (migration not yet applied) |
-| *(this commit)* | Add this change record |
+| `0e7fe14` | Add this change record |
+| `828148d` | Add single mobile launch guide |
+| *(next)* | Deliver the PMA app as a web app at /app with web push; pricing $999/mo (section 9) |
 
 ---
 
@@ -168,11 +172,12 @@ Existing variables (`PMA_SMS_ENABLED`, `PMA_EMAIL_ENABLED`, Twilio, Resend, `PMA
    commit;
    ```
    Then re-run the Supabase security advisor and confirm the next call's session closes.
-2. Set `PMA_APP_VERIFY_SECRET` in Netlify; merge and deploy.
-3. Supabase "Magic Link" email template must include `{{ .Token }}` (manager sign-in code).
-4. Push: `npx eas-cli@latest init` in `mobile/`, FCM credentials (`eas credentials`), a development
-   build, then `PMA_PUSH_ENABLED=true`.
-5. Device testing on iPhone and Android with real accounts, texts, emails and push.
+2. Apply `supabase/migrations/20261108120000_pma_web_push_subscriptions.sql` (web push table).
+3. Netlify: `PMA_APP_VERIFY_SECRET`, `PMA_WEB_PUSH_PUBLIC_KEY`, `PMA_WEB_PUSH_PRIVATE_KEY`,
+   `PMA_WEB_PUSH_SUBJECT`, `PMA_PUSH_ENABLED=true`; merge and deploy (the deploy now builds `/app`).
+4. Supabase "Magic Link" email template must include `{{ .Token }}` (manager sign-in code).
+5. Device testing on iPhone (from the Home Screen), Android and a computer with real accounts, texts,
+   emails and alerts. Full checklist: [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md).
 6. Follow-ups: tag app requests as `app` instead of `voice` (needs a migration); move rate limits
    into Supabase; tenant check inside `stellar_create_support_intake` (other repo); bring repo
    migrations in line with the live approval functions.
@@ -188,5 +193,41 @@ Existing variables (`PMA_SMS_ENABLED`, `PMA_EMAIL_ENABLED`, Twilio, Resend, `PMA
 | Mobile tests (`npm test`) | 16/16 pass |
 | Android bundle (`expo export`) | Builds; no secret in the bundle |
 | Expo web walkthroughs (mocked API) | Resident request flow; manager dashboard, approval card, assign, save with `notify_resident`; Alerts screen |
-| Live database | Push table verified; security fix verified **not** applied |
-| Not done | Real phones, real texts/emails/push, real cases in Supabase |
+| Live database | Push table verified; security fix verified **not** applied; web push table not applied |
+| Web app (section 9) | Root suite 187/187; build script ~15 s; end-to-end in Chromium under `/app` (resident flow, browser storage, manager approval dialog, web push sign-up) |
+| Not done | Real devices, real texts/emails/alerts, real cases in Supabase |
+
+---
+
+## 9. Web app delivery and pricing (later on 2026-11-08)
+
+**Decision:** no App Store for phase 1. The PMA app is part of the delivery package (the
+differentiator) as a web app at `pma.stellaruc.com/app`, installed from the browser to the home
+screen. Pricing: **$999/mo platform fee (app included) + $0.50/min usage** (previously $170/mo in
+the Oct 2026 table, then $499/mo).
+
+| File | Change |
+|---|---|
+| `netlify.toml` | Build command `bash scripts/build-web-app.sh`; public `EXPO_PUBLIC_*` values; secrets-scan exemptions for public values; `/app` → `/app/` and `/app/*` → app page; `noindex` and no-cache headers for the app and its service worker |
+| `scripts/build-web-app.sh` | **New.** Builds `mobile/` for the web into `./app` (git-ignored) |
+| `.gitignore` | Ignore `/app/` build output |
+| `mobile/app.json` | `experiments.baseUrl: "/app"`, `web.output: "single"`, web name/description/theme |
+| `mobile/public/index.html`, `manifest.webmanifest` | **New.** Installable app (manifest, iPhone home-screen tags) |
+| `mobile/public/sw.js` | **New.** Service worker: shows manager alerts; tap opens the case |
+| `mobile/public/*.png`, `mobile/assets/icon.png`, `favicon.png` | **New** PMA icon (gold star from the Stellar banner, "PMA") |
+| `mobile/src/lib/config.ts` | Web app calls the API on the same site |
+| `mobile/src/lib/storage.ts` | **New.** SecureStore on phones, localStorage in the browser |
+| `mobile/src/lib/recent.ts`, `profile.ts` | Now also remember cases and details in the browser |
+| `mobile/src/lib/dialog.ts` | **New.** Messages/confirmations that work in browsers (React Native's Alert did nothing on the web, so Approve/Decline and save messages failed silently there) |
+| `mobile/src/lib/webpush.ts` | **New.** Browser alert sign-up, iPhone Home Screen guidance, sign-out |
+| `mobile/src/app/manager/alerts.tsx`, `index.tsx`, `[id].tsx`, `assign.tsx`, `login.tsx`, `resident.tsx` | Web alerts flow; browser-safe dialogs; corrected Approve/Decline wording (Decline marks the quote declined; it does not notify the provider) |
+| `netlify/functions/lib/pma-push.js` | Alerts to browsers (web push, VAPID) alongside phones; browser registration/removal; test push includes browsers |
+| `netlify/functions/pma-manager-api.js` | `GET/POST/DELETE /api/manager/web-push` |
+| `package.json` | `web-push` dependency |
+| `supabase/migrations/20261108120000_pma_web_push_subscriptions.sql` (+ rollback) | **New** table, RLS on, service role only. **Not applied** |
+| `test/pma-push.test.js` | 6 web push tests |
+| `docs/PMA_MULTI_SUBSCRIBER_BILLING.md` | Pricing updated |
+| `docs/PMA_MOBILE_LAUNCH_GUIDE.md`, `PMA_MOBILE_BLUEPRINT_2026-11-08.md`, `mobile/README.md` | Rewritten for web app delivery |
+
+New Netlify settings: `PMA_WEB_PUSH_PUBLIC_KEY`, `PMA_WEB_PUSH_PRIVATE_KEY` (secret),
+`PMA_WEB_PUSH_SUBJECT`. The native phone-app code and its push support remain and still build.

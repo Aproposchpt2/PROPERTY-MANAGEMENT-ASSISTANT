@@ -3,7 +3,9 @@
 const { createClient } = require('@supabase/supabase-js');
 const { verifyManager } = require('./lib/pma-auth');
 const { notifyResident, addApprovalFields } = require('./lib/pma-resident-notify');
-const { registerDevice, removeDevice, sendTestPush } = require('./lib/pma-push');
+const {
+  registerDevice, removeDevice, registerWebSubscription, removeWebSubscription, sendTestPush, webPushConfigured,
+} = require('./lib/pma-push');
 
 const CORS = {
   'content-type': 'application/json',
@@ -35,7 +37,7 @@ function makeRpc(env, db) {
 
 exports.handler = async function handler(event) {
   const env = process.env;
-  const isPushToken = /\/api\/manager\/push-token\/?$/.test(event.path || '');
+  const isPushToken = /\/api\/manager\/(push-token|web-push)\/?$/.test(event.path || '');
   if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod) && !(isPushToken && event.httpMethod === 'DELETE')) {
     return json(405, { error: 'Method not allowed' });
   }
@@ -67,7 +69,25 @@ exports.handler = async function handler(event) {
           : { status: 405, body: { error: 'Method not allowed' } };
       return json(r.status, r.body);
     }
-    // POST /api/manager/push-test  send a test notification to my own phones
+    // GET /api/manager/web-push       { publicKey, enabled }  VAPID public key for the browser
+    // POST /api/manager/web-push      { subscription, prefs? } register this browser / save preferences
+    // DELETE /api/manager/web-push    { endpoint }             remove this browser (sign-out)
+    if (action === 'web-push' && !id) {
+      if (event.httpMethod === 'GET') {
+        return json(200, {
+          success: true,
+          publicKey: webPushConfigured(env) ? env.PMA_WEB_PUSH_PUBLIC_KEY : null,
+          enabled: env.PMA_PUSH_ENABLED === 'true' && webPushConfigured(env),
+        });
+      }
+      const r = event.httpMethod === 'POST'
+        ? await registerWebSubscription({ db, env, auth, subscription: body.subscription, prefs: body.prefs })
+        : event.httpMethod === 'DELETE'
+          ? await removeWebSubscription({ db, auth, endpoint: body.endpoint })
+          : { status: 405, body: { error: 'Method not allowed' } };
+      return json(r.status, r.body);
+    }
+    // POST /api/manager/push-test  send a test notification to my own phones and browsers
     if (action === 'push-test' && !id && event.httpMethod === 'POST') {
       const r = await sendTestPush({ db, env, auth });
       return json(r.status, r.body);

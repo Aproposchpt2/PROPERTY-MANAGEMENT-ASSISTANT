@@ -3,3 +3,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Built by scripts/build-web-app.sh on deploy
+/app/

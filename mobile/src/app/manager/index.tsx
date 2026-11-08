@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiError, listCases } from '../../lib/api';
@@ -9,6 +9,7 @@ import { useSession } from '../../lib/session';
 import { Button, Centered, PriorityBadge, StatusBadge } from '../../components/ui';
 import { colors } from '../../lib/theme';
 import { registerForPush, unregisterPush } from '../../lib/push';
+import { unregisterWebPush } from '../../lib/webpush';
 
 let pushRegistered = false; // once per app session and sign-in
 
@@ -26,7 +27,8 @@ export default function ManagerDashboard() {
       setCases(await listCases());
       setError(null);
       // The server has just confirmed manager access: register this phone for alerts once per sign-in.
-      if (!pushRegistered) {
+      // (Browsers wait for a tap on the Alerts screen; they can't be asked without one.)
+      if (!pushRegistered && Platform.OS !== 'web') {
         pushRegistered = true;
         registerForPush().catch(() => {});
       }
@@ -43,9 +45,9 @@ export default function ManagerDashboard() {
   const counts = useMemo(() => caseCounts(cases), [cases]);
   const approvals = useMemo(() => cases.filter(needsApproval).length, [cases]);
   const visible = useMemo(() => filterCases(cases, filter), [cases, filter]);
-  // Stop alerts to this phone first, while the session can still authorize the request.
+  // Stop alerts to this phone or browser first, while the session can still authorize the request.
   const signOut = async () => {
-    await unregisterPush();
+    await (Platform.OS === 'web' ? unregisterWebPush() : unregisterPush());
     pushRegistered = false;
     await supabase.auth.signOut();
   };

@@ -110,21 +110,28 @@ GROUP BY tenant_id
 ORDER BY total_minutes DESC;
 ```
 
-Add `platform_fee_usd` ($170 flat) to `usage_charge_usd` to get total monthly invoice per tenant.
+Add `platform_fee_usd` ($999 flat) to `usage_charge_usd` to get total monthly invoice per tenant.
 
 ---
 
-## Pricing Model (Locked Oct 2026)
+## Pricing Model (updated 2026-11-08)
+
+The PMA app is part of the delivery package and is the differentiator: residents request
+maintenance and follow their case, and managers run cases, approvals and alerts, from a web app
+at `pma.stellaruc.com/app` that installs to the home screen. No App Store; nothing extra to buy.
 
 | Component | Rate |
 |---|---|
-| Platform fee | $170/mo |
+| Platform fee (includes the PMA app for residents and managers) | **$999/mo** |
 | Usage | $0.50/min |
 | Our cost (ElevenLabs + LLM) | ~$0.09–$0.10/min |
 | Gross margin on usage | ~80% |
-| Target net profit per customer | ~$200/mo (at 100 call-min/mo) |
+| Example invoice at 100 call-min/mo | $999 + $50 = **$1,049/mo** |
 
-Note: ElevenLabs reference guide suggests $0.25–$0.35/min as a conservative per-minute markup. PMA charges $0.50/min — justified by the full workflow (vendor coordination, approval flows, tenant portal), not just the voice layer.
+History: platform fee $170/mo (Oct 2026 table) → $499/mo → **$999/mo with the app included**
+(2026-11-08). Usage rate unchanged.
+
+Note: ElevenLabs reference guide suggests $0.25–$0.35/min as a conservative per-minute markup. PMA charges $0.50/min — justified by the full workflow (vendor coordination, approval flows, tenant portal, PMA app), not just the voice layer.
 
 ---
 

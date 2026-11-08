@@ -189,3 +189,92 @@ test('sendTestPush reaches only the caller\'s enabled devices', async () => {
   assert.equal((await push.sendTestPush({ db: w.db, env, auth: { authUserId: 'u_nobody' } })).body.state, 'NO_DEVICES');
   assert.equal((await push.sendTestPush({ db: w.db, env: {}, auth: { authUserId: 'u_owner' } })).body.state, 'DISABLED');
 });
+
+// ── Web push (browsers using the web app) ──────────────────────────────────
+
+const webEnv = { ...env, PMA_WEB_PUSH_PUBLIC_KEY: 'pub', PMA_WEB_PUSH_PRIVATE_KEY: 'priv', PMA_WEB_PUSH_SUBJECT: 'mailto:ops@example.com' };
+const sub = (n) => ({ endpoint: `https://push.example.com/${n}`, p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) });
+
+function webWorld() {
+  const w = world();
+  w.tables.pma_web_push_subscriptions = [
+    { id: 'w_owner', tenant_id: 't1', tenant_user_id: 'tu_owner', user_id: 'u_owner', enabled: true, prefs: {}, ...sub('owner') },
+    { id: 'w_mgr2', tenant_id: 't1', tenant_user_id: 'tu_mgr2', user_id: 'u_mgr2', enabled: true, prefs: {}, ...sub('mgr2') },
+  ];
+  return w;
+}
+
+let webCalls = [];
+function webReplies(fn) {
+  webCalls = [];
+  push._test.setWebPush({
+    sendNotification: async (subscription, body, options) => {
+      webCalls.push({ subscription, payload: JSON.parse(body), options });
+      return fn(subscription);
+    },
+  });
+}
+
+test('alerts go to phones and browsers under the same access rules', async () => {
+  sentBatches = []; expoReplies(allOk); webReplies(() => ({ statusCode: 201 }));
+  const r = await push.notifyManagers({ env: webEnv, db: webWorld().db, kind: 'emergency', title: 'EMERGENCY', body: 'Gas', data: { requestId: 'r1' } });
+  assert.deepEqual(r, { state: 'SENT', sent: 3, failed: 0 }); // 2 phones + owner's browser (mgr2 has no property access)
+  assert.equal(webCalls.length, 1);
+  assert.equal(webCalls[0].subscription.endpoint, 'https://push.example.com/owner');
+  assert.deepEqual(webCalls[0].payload, { title: 'EMERGENCY', body: 'Gas', data: { requestId: 'r1', kind: 'emergency' } });
+  assert.equal(webCalls[0].options.urgency, 'high');
+  assert.equal(webCalls[0].options.vapidDetails.subject, 'mailto:ops@example.com');
+});
+
+test('browsers are skipped when web push keys are not configured', async () => {
+  sentBatches = []; expoReplies(allOk); webReplies(() => ({}));
+  const r = await push.notifyManagers({ env, db: webWorld().db, kind: 'approval', title: 't', body: 'b' });
+  assert.equal(r.sent, 2);
+  assert.equal(webCalls.length, 0);
+});
+
+test('a browser subscription that is gone (410) is switched off', async () => {
+  expoReplies(allOk);
+  webReplies(() => { throw Object.assign(new Error('gone'), { statusCode: 410 }); });
+  const w = webWorld();
+  const r = await push.notifyManagers({ env: webEnv, db: w.db, kind: 'approval', title: 't', body: 'b' });
+  assert.equal(r.state, 'PARTIAL');
+  const row = w.tables.pma_web_push_subscriptions.find(s => s.id === 'w_owner');
+  assert.equal(row.enabled, false);
+  assert.equal(row.last_error, 'SubscriptionGone');
+});
+
+test('a missing browser table never blocks phone alerts', async () => {
+  expoReplies(allOk); webReplies(() => ({}));
+  const w = world(); // no pma_web_push_subscriptions rows; make the lookup fail
+  const db = { from: (t) => (t === 'pma_web_push_subscriptions' ? { select: () => { throw new Error('relation does not exist'); } } : w.db.from(t)) };
+  const r = await push.notifyManagers({ env: webEnv, db, kind: 'approval', title: 't', body: 'b' });
+  assert.equal(r.sent, 2);
+});
+
+test('registerWebSubscription validates and stores; removal is own-only', async () => {
+  const w = webWorld();
+  const owner = { authUserId: 'u_owner', tenantUserId: 'tu_owner' };
+  const good = { endpoint: 'https://push.example.com/new', keys: { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) } };
+  for (const bad of [null, { endpoint: 'http://insecure', keys: good.keys }, { endpoint: 'nope', keys: good.keys },
+    { endpoint: good.endpoint, keys: { p256dh: 'short', auth: good.keys.auth } }, { endpoint: good.endpoint, keys: { p256dh: good.keys.p256dh, auth: 'bad auth!' } }]) {
+    assert.equal((await push.registerWebSubscription({ db: w.db, env: webEnv, auth: owner, subscription: bad })).status, 400);
+  }
+  const r = await push.registerWebSubscription({ db: w.db, env: webEnv, auth: owner, subscription: good, prefs: { newCase: false } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.prefs, { newCase: false, emergency: true, approval: true });
+  assert.equal(r.body.enabled, true);
+  const row = w.tables.pma_web_push_subscriptions.find(s => s.endpoint === good.endpoint);
+  assert.equal(row.p256dh, good.keys.p256dh);
+  await push.removeWebSubscription({ db: w.db, auth: { authUserId: 'u_mgr' }, endpoint: good.endpoint });
+  assert.ok(w.tables.pma_web_push_subscriptions.some(s => s.endpoint === good.endpoint));
+  await push.removeWebSubscription({ db: w.db, auth: owner, endpoint: good.endpoint });
+  assert.ok(!w.tables.pma_web_push_subscriptions.some(s => s.endpoint === good.endpoint));
+});
+
+test('test notification reaches the caller\'s browser too', async () => {
+  sentBatches = []; expoReplies(allOk); webReplies(() => ({}));
+  const r = await push.sendTestPush({ db: webWorld().db, env: webEnv, auth: { authUserId: 'u_owner' } });
+  assert.equal(r.body.sent, 2);
+  assert.equal(webCalls[0].payload.title, 'PMA test notification');
+});

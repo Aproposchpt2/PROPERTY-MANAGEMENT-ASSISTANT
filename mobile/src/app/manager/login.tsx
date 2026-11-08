@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { Button, Label } from '../../components/ui';
 import { colors } from '../../lib/theme';
+import { showMessage } from '../../lib/dialog';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,21 +17,21 @@ export default function ManagerLogin() {
 
   async function sendCode() {
     const e = email.trim().toLowerCase();
-    if (!EMAIL_RE.test(e)) return Alert.alert('Email required', 'Enter the email address on your dashboard account.');
+    if (!EMAIL_RE.test(e)) return showMessage('Email required', 'Enter the email address on your dashboard account.');
     setBusy(true);
     const { error } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: false } });
     setBusy(false);
-    if (error) return Alert.alert('Could not send code', error.message);
+    if (error) return showMessage('Could not send code', error.message);
     setSent(true);
   }
 
   async function verify() {
     const token = code.replace(/\s/g, '');
-    if (!/^\d{6,10}$/.test(token)) return Alert.alert('Code required', 'Enter the code from the email.');
+    if (!/^\d{6,10}$/.test(token)) return showMessage('Code required', 'Enter the code from the email.');
     setBusy(true);
     const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'email' });
     setBusy(false);
-    if (error) Alert.alert('Sign in failed', error.message);
+    if (error) showMessage('Sign in failed', error.message);
     // On success the session changes and the protected dashboard opens automatically.
   }
 

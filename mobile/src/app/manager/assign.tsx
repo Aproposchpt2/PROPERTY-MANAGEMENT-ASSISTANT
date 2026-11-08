@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiError, assignVendor, listVendors, type Vendor } from '../../lib/api';
 import { VISIT_WINDOWS, hourLabel, nextDays, visitWindow, windowAvailable } from '../../lib/cases';
 import { Button, Centered, Label } from '../../components/ui';
 import { colors } from '../../lib/theme';
+import { showMessage } from '../../lib/dialog';
 
 // Assign a service provider to a case, with an optional 2-hour visit window.
 // Same API as the web dashboard; the server moves the case to Assigned or Scheduled.
@@ -33,15 +34,15 @@ export default function AssignProvider() {
 
   const scheduled = dayIndex !== null && hour !== null;
   async function save() {
-    if (!vendorId) return Alert.alert('Choose a provider');
-    if ((dayIndex === null) !== (hour === null)) return Alert.alert('Finish the visit time', 'Pick both a day and a time, or neither.');
+    if (!vendorId) return showMessage('Choose a provider');
+    if ((dayIndex === null) !== (hour === null)) return showMessage('Finish the visit time', 'Pick both a day and a time, or neither.');
     const w = scheduled ? visitWindow(days[dayIndex!], hour!) : null;
     setSaving(true);
     try {
       await assignVendor(id, { vendorId, scheduledStart: w?.start ?? null, scheduledEnd: w?.end ?? null, workOrderRef: workOrder.trim() || null });
       router.back();
     } catch (e) {
-      Alert.alert('Not assigned', e instanceof ApiError ? e.message : 'Try again.');
+      showMessage('Not assigned', e instanceof ApiError ? e.message : 'Try again.');
     } finally {
       setSaving(false);
     }

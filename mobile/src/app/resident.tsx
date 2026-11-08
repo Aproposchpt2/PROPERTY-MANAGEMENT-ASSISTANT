@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, EmergencyNote, Label, StatusBadge } from '../components/ui';
@@ -7,6 +7,7 @@ import { parseStatusToken } from '../lib/cases';
 import { PMA_PHONE, displayPhone } from '../lib/config';
 import { listRecent, type RecentCase } from '../lib/recent';
 import { colors } from '../lib/theme';
+import { showMessage } from '../lib/dialog';
 
 export default function Resident() {
   const [link, setLink] = useState('');
@@ -19,14 +20,14 @@ export default function Resident() {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Call the property line', `Call ${displayPhone(PMA_PHONE)} from any phone.`);
+      showMessage('Call the property line', `Call ${displayPhone(PMA_PHONE)} from any phone.`);
     }
   }
 
   function track() {
     const token = parseStatusToken(link);
     if (!token) {
-      Alert.alert('Check the link', 'Paste the full status link from your text or email. It looks like pma.stellaruc.com/status?t=…');
+      showMessage('Check the link', 'Paste the full status link from your text or email. It looks like pma.stellaruc.com/status?t=…');
       return;
     }
     setLink('');
