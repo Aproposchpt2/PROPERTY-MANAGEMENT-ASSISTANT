@@ -64,8 +64,11 @@ exports.handler = async function handler(event) {
     }
     // PATCH /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'PATCH') {
+      // The mobile app sends notify_resident with case updates. It is not a case field, and the
+      // RPC rejects unknown keys, so strip it here (resident texting ships with the mobile backend).
+      const { notify_resident: _notify, ...patch } = body || {};
       const data = await rpc('pma_mgr_case_update_v1', {
-        request_id: id, actor_user_id: authUserId, patch: body,
+        request_id: id, actor_user_id: authUserId, patch,
       });
       if (data && data.state === 'NOT_FOUND') return json(404, data);
       return json(200, data);
