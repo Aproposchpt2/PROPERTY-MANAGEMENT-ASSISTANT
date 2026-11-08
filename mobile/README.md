@@ -3,6 +3,8 @@
 Expo (SDK 58) + Expo Router + TypeScript app for iOS and Android, built from the
 November 2026 Ruflo handoff and wired to the **live PMA system** in this repository.
 
+Full blueprint and phased next steps: [`docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md`](../docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md).
+
 ## How it connects
 
 The app has no tables of its own and needs no database migration. It uses the same
