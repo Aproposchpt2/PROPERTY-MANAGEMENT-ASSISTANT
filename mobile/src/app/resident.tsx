@@ -6,7 +6,7 @@ import { Button, Card, EmergencyNote, Label, StatusBadge } from '../components/u
 import { parseStatusToken } from '../lib/cases';
 import { PMA_PHONE, displayPhone } from '../lib/config';
 import { listRecent, type RecentCase } from '../lib/recent';
-import { colors } from '../lib/theme';
+import { colors, fonts, radius } from '../lib/theme';
 import { showMessage } from '../lib/dialog';
 
 export default function Resident() {
@@ -47,7 +47,7 @@ export default function Resident() {
       <Text style={[s.h, { marginTop: 18 }]}>Track a Case</Text>
       <Card style={s.gap}>
         <Label>STATUS LINK</Label>
-        <TextInput
+        <TextInput placeholderTextColor={colors.muted}
           style={s.input}
           value={link}
           onChangeText={setLink}
@@ -88,10 +88,10 @@ export default function Resident() {
 const s = StyleSheet.create({
   wrap: { padding: 20, gap: 12, paddingBottom: 40 },
   gap: { gap: 12 },
-  h: { fontSize: 24, fontWeight: '800', color: colors.navy },
-  p: { fontSize: 15, lineHeight: 22, color: colors.body },
-  small: { fontSize: 13, color: colors.muted, textAlign: 'center' },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: 12, fontSize: 15 },
-  recent: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 15, borderWidth: 1, borderColor: colors.line },
-  caseNo: { fontSize: 16, fontWeight: '800', color: colors.ink },
+  h: { fontSize: 28, color: colors.ivory, fontFamily: fonts.serif },
+  p: { fontSize: 15, lineHeight: 22, color: colors.body, fontFamily: fonts.regular },
+  small: { fontSize: 13, color: colors.muted, textAlign: 'center', fontFamily: fonts.regular },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: radius, fontSize: 15, fontFamily: fonts.regular, color: colors.ink },
+  recent: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius, padding: 15, borderWidth: 1, borderColor: colors.line },
+  caseNo: { fontSize: 20, color: colors.ink, fontFamily: fonts.serif, fontVariant: ['lining-nums'] },
 });

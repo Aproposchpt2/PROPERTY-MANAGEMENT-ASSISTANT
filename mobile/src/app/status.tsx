@@ -6,7 +6,7 @@ import { getPortalCase } from '../lib/api';
 import { CASE_STATUSES, eventLabel, formatWhen, parseStatusToken, statusStep, type PortalCase } from '../lib/cases';
 import { forgetCase, rememberCase } from '../lib/recent';
 import { Button, Card, Centered, EmergencyNote, Label, StatusBadge } from '../components/ui';
-import { colors } from '../lib/theme';
+import { colors, fonts, radius } from '../lib/theme';
 
 // Resident case view. Opened from the resident screen or a pma://status?t=TOKEN link.
 export default function CaseStatus() {
@@ -41,7 +41,7 @@ export default function CaseStatus() {
     return () => { sub.remove(); clearInterval(timer); };
   }, [load]);
 
-  if (state === 'loading') return <Centered><Text>Loading your case…</Text></Centered>;
+  if (state === 'loading') return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading your case…</Text></Centered>;
   if (state === 'invalid') {
     return (
       <Centered>
@@ -71,7 +71,7 @@ export default function CaseStatus() {
       <StatusBadge status={data.status} />
       {data.isEmergency ? (
         <View style={s.urgent} accessibilityRole="alert">
-          <Ionicons name="warning" size={18} color="#fff" />
+          <Ionicons name="warning" size={18} color={colors.ivory} />
           <Text style={s.urgentText}>Marked urgent. Your property team has been alerted.</Text>
         </View>
       ) : null}
@@ -81,8 +81,8 @@ export default function CaseStatus() {
           const done = step >= 0 && i <= step;
           return (
             <View key={st} style={s.stepRow} accessibilityLabel={`${st}${done ? ', done' : ''}`}>
-              <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={done ? colors.teal : colors.field} />
-              <Text style={[s.stepText, done && s.stepDone, i === step && { color: colors.teal }]}>{st}</Text>
+              <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={done ? colors.gold : colors.field} />
+              <Text style={[s.stepText, done && s.stepDone, i === step && { color: colors.gold }]}>{st}</Text>
             </View>
           );
         })}
@@ -132,14 +132,14 @@ export default function CaseStatus() {
 
 const s = StyleSheet.create({
   wrap: { padding: 20, gap: 12, paddingBottom: 40 },
-  center: { textAlign: 'center', fontSize: 15, color: colors.body, lineHeight: 22 },
-  caseNo: { fontSize: 26, fontWeight: '800', color: colors.navy },
-  meta: { fontSize: 13, color: colors.muted },
-  urgent: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.ember, padding: 12, borderRadius: 12 },
-  urgentText: { color: '#fff', fontWeight: '800', flex: 1 },
+  center: { textAlign: 'center', fontSize: 15, color: colors.body, lineHeight: 22, fontFamily: fonts.regular },
+  caseNo: { fontSize: 30, color: colors.ivory, fontFamily: fonts.serif, fontVariant: ['lining-nums'] },
+  meta: { fontSize: 13, color: colors.muted, fontFamily: fonts.regular },
+  urgent: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.urgent, padding: 12, borderRadius: radius },
+  urgentText: { color: colors.ivory, flex: 1, fontFamily: fonts.bold },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepText: { fontSize: 15, color: colors.muted },
-  stepDone: { color: colors.ink, fontWeight: '700' },
-  body: { fontSize: 15, lineHeight: 22, color: colors.body },
-  eventTitle: { fontSize: 14, fontWeight: '700', color: colors.ink },
+  stepText: { fontSize: 15, color: colors.muted, fontFamily: fonts.regular },
+  stepDone: { color: colors.ink, fontFamily: fonts.bold },
+  body: { fontSize: 15, lineHeight: 22, color: colors.body, fontFamily: fonts.regular },
+  eventTitle: { fontSize: 14, color: colors.ink, fontFamily: fonts.bold },
 });

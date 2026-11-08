@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, EmergencyNote } from '../components/ui';
-import { colors } from '../lib/theme';
+import { colors, fonts, radius } from '../lib/theme';
 import { MANAGER_ENABLED } from '../lib/config';
 
 export default function Welcome() {
@@ -35,9 +35,9 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.page },
   wrap: { padding: 24, gap: 12, paddingTop: 36 },
   hero: { gap: 8, marginBottom: 18 },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.1, color: colors.teal },
-  title: { fontSize: 32, fontWeight: '800', color: colors.navy },
-  tag: { fontSize: 16, lineHeight: 23, color: '#52606D' },
-  hint: { fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' },
-  footer: { fontSize: 11, color: colors.muted, textAlign: 'center', marginTop: 20 },
+  eyebrow: { fontSize: 10, letterSpacing: 1.1, color: colors.gold, fontFamily: fonts.label },
+  title: { fontSize: 36, color: colors.ivory, fontFamily: fonts.serif },
+  tag: { fontSize: 16, lineHeight: 23, color: colors.body, fontFamily: fonts.regular },
+  hint: { fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center', fontFamily: fonts.regular },
+  footer: { fontSize: 11, color: colors.muted, textAlign: 'center', marginTop: 20, fontFamily: fonts.regular },
 });

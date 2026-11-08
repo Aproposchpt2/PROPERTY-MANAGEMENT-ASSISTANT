@@ -25,7 +25,7 @@
       "output": "single",
       "name": "Property Management Assistant",
       "description": "Request maintenance, follow your case, and manage property incidents.",
-      "themeColor": "#071B33"
+      "themeColor": "#050505"
     },
     "experiments": {
       "baseUrl": "/app"
@@ -33,7 +33,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-notifications", { "color": "#0E7490" }]
+      [
+        "expo-notifications",
+        {
+          "color": "#C8A84B"
+        }
+      ],
+      "expo-font"
     ]
   }
 }

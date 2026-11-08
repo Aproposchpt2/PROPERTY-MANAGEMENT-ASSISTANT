@@ -274,3 +274,23 @@ root suite 187/187, mobile 16/16, typecheck clean.
 
 **Open:** server texts and emails still say "Desert Ridge" (`lib/pma-sms.js`, `lib/pma-email.js`); make it
 a per-client setting before a second client goes live.
+
+---
+
+## 12. Brand treatment: black, gold and white (later on 2026-11-08)
+
+The app (staff in-house app and resident web app) now follows the website's brand treatment
+(`pma-site.css`): black backgrounds, gold buttons/outlines/labels, ivory and warm-white text,
+Cormorant Garamond headlines, DM Sans text, Syncopate labels, square corners and thin gold lines.
+Emergencies keep a deep red so they stand out.
+
+| File | Change |
+|---|---|
+| `mobile/src/lib/theme.ts` | Brand colour and font tokens; shared black/gold header style |
+| `mobile/src/app/_layout.tsx` | Loads the three brand fonts (falls back to system fonts if they fail) |
+| `mobile/src/components/ui.tsx` | Gold solid / gold outline buttons, gold-bordered badges, dark cards, red emergency note |
+| All screens | Converted to brand tokens; inputs with ivory text on dark; counts and case numbers use standard-height numerals |
+| `mobile/app.json`, `public/manifest.webmanifest`, `public/index.html` | Black theme colour and background; gold notification colour |
+| `mobile/package.json` | `expo-font`, `@expo-google-fonts/cormorant-garamond`, `dm-sans`, `syncopate` |
+
+Verified: typecheck clean, mobile 16/16, web walkthrough unchanged, staff app and iPhone/Android bundles build.

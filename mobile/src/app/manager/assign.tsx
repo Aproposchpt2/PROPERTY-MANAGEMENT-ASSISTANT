@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ApiError, assignVendor, listVendors, type Vendor } from '../../lib/api';
 import { VISIT_WINDOWS, hourLabel, nextDays, visitWindow, windowAvailable } from '../../lib/cases';
 import { Button, Centered, Label } from '../../components/ui';
-import { colors } from '../../lib/theme';
+import { colors, fonts, radius } from '../../lib/theme';
 import { showMessage } from '../../lib/dialog';
 
 // Assign a service provider to a case, with an optional 2-hour visit window.
@@ -30,7 +30,7 @@ export default function AssignProvider() {
   }, []);
 
   if (error) return <Centered><Text style={s.p}>{error}</Text><Button label="Back" tone="ghost" onPress={() => router.back()} /></Centered>;
-  if (!vendors) return <Centered><Text>Loading providers…</Text></Centered>;
+  if (!vendors) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading providers…</Text></Centered>;
 
   const scheduled = dayIndex !== null && hour !== null;
   async function save() {
@@ -66,7 +66,7 @@ export default function AssignProvider() {
           accessibilityState={{ selected: vendorId === v.id }}
           accessibilityLabel={`${v.name ?? 'Provider'}${v.trade ? `, ${v.trade}` : ''}`}
         >
-          <Ionicons name={vendorId === v.id ? 'radio-button-on' : 'radio-button-off'} size={22} color={vendorId === v.id ? colors.teal : colors.muted} />
+          <Ionicons name={vendorId === v.id ? 'radio-button-on' : 'radio-button-off'} size={22} color={vendorId === v.id ? colors.gold : colors.muted} />
           <View style={{ flex: 1 }}>
             <Text style={s.vName}>{v.name ?? 'Unnamed provider'}</Text>
             {v.trade ? <Text style={s.meta}>{v.trade}</Text> : null}
@@ -92,7 +92,7 @@ export default function AssignProvider() {
       ) : null}
 
       <Label>WORK ORDER # (OPTIONAL)</Label>
-      <TextInput style={s.input} value={workOrder} onChangeText={setWorkOrder} maxLength={100} accessibilityLabel="Work order number" />
+      <TextInput placeholderTextColor={colors.muted} style={s.input} value={workOrder} onChangeText={setWorkOrder} maxLength={100} accessibilityLabel="Work order number" />
 
       <Text style={s.small}>
         {scheduled
@@ -107,23 +107,23 @@ export default function AssignProvider() {
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={[s.chip, on && s.chipOn]} accessibilityRole="button" accessibilityState={{ selected: on }}>
-      <Text style={[s.chipText, on && { color: '#fff' }]}>{label}</Text>
+      <Text style={[s.chipText, on && { color: colors.onAccent }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const s = StyleSheet.create({
   wrap: { padding: 20, gap: 10, paddingBottom: 48 },
-  caseNo: { fontSize: 22, fontWeight: '800', color: colors.navy },
-  p: { fontSize: 15, lineHeight: 22, color: colors.body, textAlign: 'center' },
-  vendor: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 14 },
-  vendorOn: { borderColor: colors.teal, borderWidth: 2 },
-  vName: { fontSize: 15, fontWeight: '800', color: colors.ink },
-  meta: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  caseNo: { fontSize: 26, color: colors.ivory, fontFamily: fonts.serif, fontVariant: ['lining-nums'] },
+  p: { fontSize: 15, lineHeight: 22, color: colors.body, textAlign: 'center', fontFamily: fonts.regular },
+  vendor: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: radius, padding: 14 },
+  vendorOn: { borderColor: colors.gold, borderWidth: 2 },
+  vName: { fontSize: 19, color: colors.ink, fontFamily: fonts.serif },
+  meta: { fontSize: 13, color: colors.muted, marginTop: 2, fontFamily: fonts.regular },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field },
-  chipOn: { backgroundColor: colors.teal, borderColor: colors.teal },
-  chipText: { fontWeight: '700', color: colors.body },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: 12, fontSize: 15 },
-  small: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 6 },
+  chip: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: radius, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field },
+  chipOn: { backgroundColor: colors.gold, borderColor: colors.gold },
+  chipText: { color: colors.body, fontFamily: fonts.bold },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: radius, fontSize: 15, fontFamily: fonts.regular, color: colors.ink },
+  small: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 6, fontFamily: fonts.regular },
 });

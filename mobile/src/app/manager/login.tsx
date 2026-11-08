@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { Button, Label } from '../../components/ui';
-import { colors } from '../../lib/theme';
+import { colors, fonts, radius } from '../../lib/theme';
 import { showMessage } from '../../lib/dialog';
 import { BUSINESS_NAME } from '../../lib/config';
 
@@ -39,11 +39,11 @@ export default function ManagerLogin() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
-        {BUSINESS_NAME ? <Text style={s.business}>{BUSINESS_NAME}</Text> : null}
         <Text style={s.brand}>PROPERTY MANAGEMENT ASSISTANT</Text>
+        <Text style={s.business}>{BUSINESS_NAME || 'Team Sign In'}</Text>
         <Text style={s.tag}>Team sign in. Use the email on your dashboard account; we'll email you a sign-in code.</Text>
         <Label>EMAIL</Label>
-        <TextInput
+        <TextInput placeholderTextColor={colors.muted}
           style={s.input}
           autoCapitalize="none"
           autoComplete="email"
@@ -59,7 +59,7 @@ export default function ManagerLogin() {
         ) : (
           <>
             <Label>CODE</Label>
-            <TextInput
+            <TextInput placeholderTextColor={colors.muted}
               style={s.input}
               keyboardType="number-pad"
               textContentType="oneTimeCode"
@@ -81,8 +81,8 @@ export default function ManagerLogin() {
 
 const s = StyleSheet.create({
   wrap: { padding: 24, gap: 12, paddingTop: 32 },
-  business: { fontSize: 26, fontWeight: '800', color: colors.navy },
-  brand: { fontSize: 22, fontWeight: '800', color: colors.navy },
-  tag: { fontSize: 15, lineHeight: 22, color: '#52606D', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field, padding: 15, borderRadius: 12, fontSize: 16 },
+  business: { fontSize: 34, lineHeight: 38, color: colors.ivory, fontFamily: fonts.serif },
+  brand: { fontSize: 10, letterSpacing: 1.2, color: colors.gold, fontFamily: fonts.label, marginBottom: 6 },
+  tag: { fontSize: 15, lineHeight: 22, color: colors.body, marginBottom: 8, fontFamily: fonts.regular },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field, padding: 15, borderRadius: radius, fontSize: 16, fontFamily: fonts.regular, color: colors.ink },
 });

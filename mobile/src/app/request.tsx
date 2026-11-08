@@ -8,7 +8,7 @@ import { loadProfile, saveProfile } from '../lib/profile';
 import { rememberCase } from '../lib/recent';
 import { PMA_PHONE, displayPhone } from '../lib/config';
 import { Button, Card, EmergencyNote, Label } from '../components/ui';
-import { colors } from '../lib/theme';
+import { colors, fonts, radius } from '../lib/theme';
 
 type Step = 'details' | 'contact' | 'code' | 'done';
 const CONSENT_TEXT =
@@ -118,19 +118,19 @@ export default function MaintenanceRequest() {
           <>
             <EmergencyNote />
             <Label>WHAT'S THE PROBLEM?</Label>
-            <TextInput
+            <TextInput placeholderTextColor={colors.muted}
               style={[s.input, s.area]} multiline value={description} onChangeText={setDescription}
               maxLength={LIMITS.description} accessibilityLabel="Describe the problem"
               placeholder="What is wrong, where it is, when it started, and anything we should know to get in"
             />
             <Label>YOUR NAME</Label>
-            <TextInput style={s.input} value={name} onChangeText={setName} maxLength={LIMITS.name}
+            <TextInput placeholderTextColor={colors.muted} style={s.input} value={name} onChangeText={setName} maxLength={LIMITS.name}
               autoComplete="name" textContentType="name" accessibilityLabel="Your name" placeholder="First and last name" />
             <Label>PROPERTY ADDRESS</Label>
-            <TextInput style={s.input} value={address} onChangeText={setAddress} maxLength={LIMITS.address}
+            <TextInput placeholderTextColor={colors.muted} style={s.input} value={address} onChangeText={setAddress} maxLength={LIMITS.address}
               autoComplete="street-address" textContentType="fullStreetAddress" accessibilityLabel="Property address" placeholder="Street address" />
             <Label>UNIT OR APARTMENT</Label>
-            <TextInput style={s.input} value={unit} onChangeText={setUnit} maxLength={LIMITS.unit}
+            <TextInput placeholderTextColor={colors.muted} style={s.input} value={unit} onChangeText={setUnit} maxLength={LIMITS.unit}
               accessibilityLabel="Unit or apartment" placeholder='e.g. 14B, or "none"' />
             <Label>LANGUAGE FOR UPDATES</Label>
             <Choice options={[['en', 'English'], ['es', 'Español']]} value={language} onChange={v => setLanguage(v as 'en' | 'es')} />
@@ -143,14 +143,14 @@ export default function MaintenanceRequest() {
           <>
             <Text style={s.p}>We'll text a code to your mobile phone to confirm it's you, the same way we know who's calling.</Text>
             <Label>MOBILE PHONE</Label>
-            <TextInput style={s.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad"
+            <TextInput placeholderTextColor={colors.muted} style={s.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad"
               autoComplete="tel" textContentType="telephoneNumber" accessibilityLabel="Mobile phone" placeholder="(702) 555-0100" maxLength={20} />
             <Label>SEND MY CASE NUMBER AND UPDATES BY</Label>
             <Choice options={[['sms', 'Text'], ['email', 'Email']]} value={method} onChange={v => setMethod(v as 'sms' | 'email')} />
             {method === 'email' ? (
               <>
                 <Label>EMAIL</Label>
-                <TextInput style={s.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none"
+                <TextInput placeholderTextColor={colors.muted} style={s.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none"
                   autoComplete="email" textContentType="emailAddress" accessibilityLabel="Email" placeholder="you@example.com" maxLength={254} />
               </>
             ) : null}
@@ -158,7 +158,7 @@ export default function MaintenanceRequest() {
               style={s.consent} onPress={() => setConsent(c => !c)}
               accessibilityRole="checkbox" accessibilityState={{ checked: consent }}
             >
-              <Ionicons name={consent ? 'checkbox' : 'square-outline'} size={24} color={consent ? colors.teal : colors.muted} />
+              <Ionicons name={consent ? 'checkbox' : 'square-outline'} size={24} color={consent ? colors.gold : colors.muted} />
               <Text style={s.consentText}>{CONSENT_TEXT}</Text>
             </Pressable>
             {error ? <Text style={s.error} accessibilityRole="alert">{error}</Text> : null}
@@ -170,7 +170,7 @@ export default function MaintenanceRequest() {
         {step === 'code' ? (
           <>
             <Text style={s.p}>Enter the 6-digit code we texted to the number ending in {last4}. It expires in 10 minutes.</Text>
-            <TextInput
+            <TextInput placeholderTextColor={colors.muted}
               style={[s.input, s.code]} value={code} onChangeText={v => setCode(v.replace(/\D/g, '').slice(0, 6))}
               keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code"
               accessibilityLabel="6-digit code" placeholder="••••••" maxLength={6} autoFocus
@@ -184,13 +184,13 @@ export default function MaintenanceRequest() {
         {step === 'done' && result ? (
           <>
             <View style={s.doneHead}>
-              <Ionicons name="checkmark-circle" size={56} color={colors.green} />
+              <Ionicons name="checkmark-circle" size={56} color={colors.ivory} />
               <Text style={s.doneTitle}>Request received</Text>
               <Text style={s.caseNo}>Case {result.caseNumber}</Text>
             </View>
             {result.urgent ? (
               <View style={s.urgent} accessibilityRole="alert">
-                <Ionicons name="warning" size={20} color="#fff" />
+                <Ionicons name="warning" size={20} color={colors.ivory} />
                 <Text style={s.urgentText}>
                   This looks urgent, so your property team has been alerted now. If anyone is in danger, leave the area and call 911.
                 </Text>
@@ -227,8 +227,8 @@ function Steps({ step }: { step: Step }) {
     <View style={s.steps} accessibilityLabel={`Step ${at + 1} of 3`}>
       {steps.map(([k, label], i) => (
         <View key={k} style={s.stepItem}>
-          <View style={[s.dot, i <= at && s.dotOn]}><Text style={[s.dotText, i <= at && { color: '#fff' }]}>{i + 1}</Text></View>
-          <Text style={[s.stepLabel, i === at && { color: colors.navy, fontWeight: '800' }]}>{label}</Text>
+          <View style={[s.dot, i <= at && s.dotOn]}><Text style={[s.dotText, i <= at && { color: colors.onAccent }]}>{i + 1}</Text></View>
+          <Text style={[s.stepLabel, i === at && { color: colors.goldLight, fontFamily: fonts.bold }]}>{label}</Text>
         </View>
       ))}
     </View>
@@ -243,7 +243,7 @@ function Choice({ options, value, onChange }: { options: [string, string][]; val
           key={v} onPress={() => onChange(v)} style={[s.choiceItem, value === v && s.choiceOn]}
           accessibilityRole="radio" accessibilityState={{ selected: value === v }}
         >
-          <Text style={[s.choiceText, value === v && { color: '#fff' }]}>{label}</Text>
+          <Text style={[s.choiceText, value === v && { color: colors.onAccent }]}>{label}</Text>
         </Pressable>
       ))}
     </View>
@@ -252,28 +252,28 @@ function Choice({ options, value, onChange }: { options: [string, string][]; val
 
 const s = StyleSheet.create({
   wrap: { padding: 20, gap: 10, paddingBottom: 48 },
-  p: { fontSize: 15, lineHeight: 22, color: colors.body },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: 12, fontSize: 16 },
+  p: { fontSize: 15, lineHeight: 22, color: colors.body, fontFamily: fonts.regular },
+  input: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field, padding: 14, borderRadius: radius, fontSize: 16, fontFamily: fonts.regular, color: colors.ink },
   area: { minHeight: 130, textAlignVertical: 'top' },
-  code: { fontSize: 28, letterSpacing: 10, textAlign: 'center', fontWeight: '800' },
-  error: { color: colors.emberDark, fontWeight: '700', fontSize: 14 },
+  code: { fontSize: 28, letterSpacing: 10, textAlign: 'center', fontFamily: fonts.bold, color: colors.ink },
+  error: { color: colors.urgentText, fontSize: 14, fontFamily: fonts.bold },
   choice: { flexDirection: 'row', gap: 8 },
-  choiceItem: { flex: 1, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.field, backgroundColor: '#fff', alignItems: 'center' },
-  choiceOn: { backgroundColor: colors.teal, borderColor: colors.teal },
-  choiceText: { fontWeight: '800', color: colors.body },
+  choiceItem: { flex: 1, padding: 13, borderRadius: radius, borderWidth: 1, borderColor: colors.field, backgroundColor: colors.card, alignItems: 'center' },
+  choiceOn: { backgroundColor: colors.gold, borderColor: colors.gold },
+  choiceText: { color: colors.body, fontFamily: fonts.bold },
   consent: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 8 },
-  consentText: { flex: 1, fontSize: 13, lineHeight: 19, color: colors.body },
+  consentText: { flex: 1, fontSize: 13, lineHeight: 19, color: colors.body, fontFamily: fonts.regular },
   steps: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   stepItem: { alignItems: 'center', gap: 4, flex: 1 },
   dot: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  dotOn: { backgroundColor: colors.teal },
-  dotText: { fontWeight: '800', color: colors.muted },
-  stepLabel: { fontSize: 12, color: colors.muted },
+  dotOn: { backgroundColor: colors.gold },
+  dotText: { color: colors.muted, fontFamily: fonts.bold },
+  stepLabel: { fontSize: 12, color: colors.muted, fontFamily: fonts.regular },
   doneHead: { alignItems: 'center', gap: 6, marginVertical: 16 },
-  doneTitle: { fontSize: 26, fontWeight: '800', color: colors.navy },
-  caseNo: { fontSize: 20, fontWeight: '800', color: colors.teal },
-  urgent: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: colors.ember, padding: 14, borderRadius: 12 },
-  urgentText: { color: '#fff', fontWeight: '800', flex: 1, lineHeight: 20 },
+  doneTitle: { fontSize: 30, color: colors.ivory, fontFamily: fonts.serif },
+  caseNo: { fontSize: 24, color: colors.gold, fontFamily: fonts.serif, fontVariant: ['lining-nums'] },
+  urgent: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: colors.urgent, padding: 14, borderRadius: radius },
+  urgentText: { color: colors.ivory, flex: 1, lineHeight: 20, fontFamily: fonts.bold },
   callLink: { alignItems: 'center', paddingVertical: 14 },
-  callText: { color: colors.teal, fontWeight: '800' },
+  callText: { color: colors.gold, fontFamily: fonts.bold },
 });

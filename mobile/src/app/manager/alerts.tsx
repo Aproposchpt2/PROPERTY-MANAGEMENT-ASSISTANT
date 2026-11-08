@@ -12,7 +12,7 @@ type ScreenState = PushState | { state: 'ASK'; message: string };
 const initialState = (): Promise<ScreenState> => (isWeb ? webPushStatus() : registerForPush());
 const register = (prefs?: PushPrefs): Promise<PushState> => (isWeb ? registerForWebPush(prefs) : registerForPush(prefs));
 import { Button, Card, Centered, Label } from '../../components/ui';
-import { colors } from '../../lib/theme';
+import { colors, fonts, radius } from '../../lib/theme';
 import { showMessage } from '../../lib/dialog';
 
 const ITEMS: { key: keyof PushPrefs; title: string; detail: string }[] = [
@@ -67,12 +67,12 @@ export default function Alerts() {
     }
   }
 
-  if (!push) return <Centered><Text>Checking notifications…</Text></Centered>;
+  if (!push) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Checking notifications…</Text></Centered>;
 
   if (push.state === 'ASK') {
     return (
       <Centered>
-        <Ionicons name="notifications" size={40} color={colors.teal} />
+        <Ionicons name="notifications" size={40} color={colors.gold} />
         <Text style={s.center}>{push.message}</Text>
         <Button label="Turn on alerts" icon="notifications" onPress={turnOn} busy={saving} />
         <Text style={s.small}>Your browser will ask for permission. You'll still get staff text messages.</Text>
@@ -111,7 +111,7 @@ export default function Alerts() {
               value={push.prefs[item.key]}
               onValueChange={v => toggle(item.key, v)}
               disabled={saving}
-              trackColor={{ true: colors.teal }}
+              trackColor={{ true: colors.gold }}
               accessibilityLabel={item.title}
             />
           </View>
@@ -127,11 +127,11 @@ export default function Alerts() {
 
 const s = StyleSheet.create({
   wrap: { padding: 20, gap: 12, paddingBottom: 40 },
-  center: { textAlign: 'center', fontSize: 15, lineHeight: 22, color: colors.body },
-  small: { fontSize: 13, color: colors.muted, textAlign: 'center', lineHeight: 19 },
+  center: { textAlign: 'center', fontSize: 15, lineHeight: 22, color: colors.body, fontFamily: fonts.regular },
+  small: { fontSize: 13, color: colors.muted, textAlign: 'center', lineHeight: 19, fontFamily: fonts.regular },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  title: { fontSize: 16, fontWeight: '800', color: colors.ink },
-  detail: { fontSize: 13, color: colors.muted, marginTop: 3, lineHeight: 18 },
-  notice: { backgroundColor: colors.emberSoft, borderRadius: 12, padding: 14 },
-  noticeText: { color: colors.emberDark, fontWeight: '600', lineHeight: 20 },
+  title: { fontSize: 20, color: colors.ink, fontFamily: fonts.serif },
+  detail: { fontSize: 13, color: colors.muted, marginTop: 3, lineHeight: 18, fontFamily: fonts.regular },
+  notice: { backgroundColor: colors.urgentSoft, borderRadius: radius, padding: 14 },
+  noticeText: { color: colors.urgentText, lineHeight: 20, fontFamily: fonts.bold },
 });

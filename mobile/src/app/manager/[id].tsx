@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ApiError, answerApproval, getCase, updateCase, type CasePatch } from '../../lib/api';
 import { CASE_STATUSES, eventLabel, formatMoney, formatWhen, isUrgent, needsApproval, savedMessage, type CaseDetail } from '../../lib/cases';
 import { Button, Card, Centered, Label, PriorityBadge, StatusBadge } from '../../components/ui';
-import { colors } from '../../lib/theme';
+import { colors, fonts, radius } from '../../lib/theme';
 import { confirmAction, showMessage } from '../../lib/dialog';
 
 const MAX_TENANT_UPDATE = 1000;   // matches the pma_maintenance_requests check constraints
@@ -46,8 +46,8 @@ export default function CaseWorkspace() {
     loadedOnce.current = true;
   }, [load]));
 
-  if (error && !c) return <Centered><Text>{error}</Text><Button label="Try again" onPress={() => load()} /></Centered>;
-  if (!c) return <Centered><Text>Loading case…</Text></Centered>;
+  if (error && !c) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>{error}</Text><Button label="Try again" onPress={() => load()} /></Centered>;
+  if (!c) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading case…</Text></Centered>;
 
   const patch: CasePatch = {};
   if (status !== c.status) patch.status = status;
@@ -104,7 +104,7 @@ export default function CaseWorkspace() {
       <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
         {urgent ? (
           <View style={s.urgent} accessibilityRole="alert">
-            <Ionicons name="warning" size={18} color="#fff" />
+            <Ionicons name="warning" size={18} color={colors.ivory} />
             <Text style={s.urgentText}>
               {c.isEmergency ? 'EMERGENCY. If anyone is in danger, make sure 911 has been called.' : 'Urgent priority.'}
             </Text>
@@ -168,13 +168,13 @@ export default function CaseWorkspace() {
               accessibilityState={{ selected: status === st }}
               style={[s.status, status === st && s.statusActive]}
             >
-              <Text style={[s.statusText, status === st && { color: '#fff' }]}>{st}</Text>
+              <Text style={[s.statusText, status === st && { color: colors.onAccent }]}>{st}</Text>
             </Pressable>
           ))}
         </View>
 
         <Label>UPDATE FOR THE RESIDENT</Label>
-        <TextInput
+        <TextInput placeholderTextColor={colors.muted}
           multiline
           value={tenantUpdate}
           onChangeText={setTenantUpdate}
@@ -190,7 +190,7 @@ export default function CaseWorkspace() {
               style={s.notify} onPress={() => setNotify(n => !n)}
               accessibilityRole="checkbox" accessibilityState={{ checked: notify }}
             >
-              <Ionicons name={notify ? 'checkbox' : 'square-outline'} size={22} color={notify ? colors.teal : colors.muted} />
+              <Ionicons name={notify ? 'checkbox' : 'square-outline'} size={22} color={notify ? colors.gold : colors.muted} />
               <Text style={s.notifyText}>
                 Also send this update to the resident by {c.contactMethod === 'sms' ? 'text' : 'email'}{c.contactDestinationMasked ? ` (${c.contactDestinationMasked})` : ''}
               </Text>
@@ -201,7 +201,7 @@ export default function CaseWorkspace() {
         ) : null}
 
         <Label>INTERNAL NOTES (STAFF ONLY)</Label>
-        <TextInput
+        <TextInput placeholderTextColor={colors.muted}
           multiline
           value={notes}
           onChangeText={setNotes}
@@ -240,27 +240,27 @@ export default function CaseWorkspace() {
 
 const s = StyleSheet.create({
   body: { padding: 20, gap: 10, paddingBottom: 48 },
-  urgent: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.ember, padding: 12, borderRadius: 12 },
-  urgentText: { color: '#fff', fontWeight: '800', flex: 1 },
+  urgent: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.urgent, padding: 12, borderRadius: radius },
+  urgentText: { color: colors.ivory, flex: 1, fontFamily: fonts.bold },
   badges: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '800', color: colors.navy },
-  meta: { fontSize: 13, color: colors.muted },
-  desc: { fontSize: 16, lineHeight: 23, color: colors.body },
-  info: { fontSize: 14, color: colors.body },
+  title: { fontSize: 28, color: colors.ivory, fontFamily: fonts.serif },
+  meta: { fontSize: 13, color: colors.muted, fontFamily: fonts.regular },
+  desc: { fontSize: 16, lineHeight: 23, color: colors.body, fontFamily: fonts.regular },
+  info: { fontSize: 14, color: colors.body, fontFamily: fonts.regular },
   statuses: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  status: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.field },
-  statusActive: { backgroundColor: colors.teal, borderColor: colors.teal },
-  statusText: { fontWeight: '800', color: colors.body },
-  input: { backgroundColor: '#fff', minHeight: 100, textAlignVertical: 'top', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.field, fontSize: 15 },
-  count: { fontSize: 11, color: colors.muted, textAlign: 'right' },
-  small: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 4 },
-  link: { fontSize: 14, color: colors.teal, fontWeight: '800', textAlign: 'center' },
-  approval: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#93C5FD', borderRadius: 14, padding: 14, gap: 8 },
-  approvalTitle: { fontSize: 16, fontWeight: '800', color: '#1E3A8A' },
+  status: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: radius, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field },
+  statusActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  statusText: { color: colors.body, fontFamily: fonts.bold },
+  input: { backgroundColor: colors.card, minHeight: 100, textAlignVertical: 'top', padding: 14, borderRadius: radius, borderWidth: 1, borderColor: colors.field, fontSize: 15, fontFamily: fonts.regular, color: colors.ink },
+  count: { fontSize: 11, color: colors.muted, textAlign: 'right', fontFamily: fonts.regular },
+  small: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 4, fontFamily: fonts.regular },
+  link: { fontSize: 14, color: colors.gold, textAlign: 'center', fontFamily: fonts.bold },
+  approval: { backgroundColor: colors.goldDeep, borderWidth: 1, borderColor: colors.gold, borderRadius: radius, padding: 14, gap: 8 },
+  approvalTitle: { fontSize: 20, color: colors.goldLight, fontFamily: fonts.serif },
   approvalRow: { flexDirection: 'row', gap: 10 },
-  provider: { fontSize: 16, fontWeight: '800', color: colors.ink },
+  provider: { fontSize: 20, color: colors.ink, fontFamily: fonts.serif },
   notify: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 4 },
-  notifyText: { flex: 1, fontSize: 14, color: colors.body },
-  eventTitle: { fontSize: 14, fontWeight: '700', color: colors.ink },
-  eventBody: { fontSize: 13, color: colors.body, marginTop: 2 },
+  notifyText: { flex: 1, fontSize: 14, color: colors.body, fontFamily: fonts.regular },
+  eventTitle: { fontSize: 14, color: colors.ink, fontFamily: fonts.bold },
+  eventBody: { fontSize: 13, color: colors.body, marginTop: 2, fontFamily: fonts.regular },
 });

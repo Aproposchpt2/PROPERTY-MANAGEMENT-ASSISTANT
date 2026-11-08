@@ -173,6 +173,7 @@ Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the
 | Deep link | `pma://status?t=TOKEN` opens a resident's case (native builds) |
 | Delivery | **Web app** at `pma.stellaruc.com/app` (Expo web export, `experiments.baseUrl: "/app"`), built by Netlify on each deploy (`scripts/build-web-app.sh` → `./app`, git-ignored). Installable: `public/manifest.webmanifest`, PMA icons, `public/index.html`. Same-origin API calls |
 | Storage | Phones: SecureStore. Web: the browser's localStorage (`src/lib/storage.ts`) |
+| Brand | Same treatment as the website (`pma-site.css`): black `#050505`, gold `#C8A84B`/`#E4C878`, ivory `#F7F4EC`; Cormorant Garamond headlines, DM Sans text, Syncopate labels; square corners, thin gold lines. Deep red only for emergency notices. All in `src/lib/theme.ts`; fonts loaded in `app/_layout.tsx` |
 | Dialogs | `src/lib/dialog.ts`: browser dialogs on the web (React Native's Alert does nothing there), native alerts on phones |
 | In-house app | iOS/Android from the same code; `mobile/eas.json` profile `internal` (private install links, APK on Android, manager screens on, public values in `env`); `production` profile kept for a possible store listing |
 

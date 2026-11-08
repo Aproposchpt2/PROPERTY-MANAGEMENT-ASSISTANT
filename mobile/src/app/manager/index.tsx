@@ -7,7 +7,7 @@ import { QUEUE_FILTERS, caseCounts, filterCases, formatMoney, formatWhen, isUrge
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/session';
 import { Button, Centered, PriorityBadge, StatusBadge } from '../../components/ui';
-import { colors } from '../../lib/theme';
+import { colors, fonts, radius } from '../../lib/theme';
 import { registerForPush, unregisterPush } from '../../lib/push';
 import { unregisterWebPush } from '../../lib/webpush';
 import { BUSINESS_NAME } from '../../lib/config';
@@ -57,10 +57,10 @@ export default function ManagerDashboard() {
     headerRight: () => (
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Pressable onPress={() => router.push('/manager/alerts')} accessibilityRole="button" accessibilityLabel="Alerts" hitSlop={10} style={{ paddingHorizontal: 10 }}>
-          <Ionicons name="notifications-outline" size={22} color="#fff" />
+          <Ionicons name="notifications-outline" size={22} color={colors.ivory} />
         </Pressable>
         <Pressable onPress={signOut} accessibilityRole="button" hitSlop={10} style={{ paddingHorizontal: 12 }}>
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Sign out</Text>
+          <Text style={{ color: colors.goldLight, fontFamily: fonts.bold }}>Sign out</Text>
         </Pressable>
       </View>
     ),
@@ -81,7 +81,7 @@ export default function ManagerDashboard() {
       </Centered>
     );
   }
-  if (!loaded) return <Centered>{header}<Text>Loading cases…</Text></Centered>;
+  if (!loaded) return <Centered>{header}<Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading cases…</Text></Centered>;
 
   return (
     <View style={s.page}>
@@ -97,18 +97,18 @@ export default function ManagerDashboard() {
             <Text style={s.subtitle}>Monitor incidents, prioritize response and keep everyone updated.</Text>
             {error ? <Text style={s.error}>{error.message} Pull down to retry.</Text> : null}
             <View style={s.metrics}>
-              <Metric label="Active" value={counts.active} icon="pulse" color={colors.teal} onPress={() => setFilter('All')} />
-              <Metric label="New" value={counts.new} icon="notifications" color={colors.blue} onPress={() => setFilter('New')} />
-              <Metric label="Urgent" value={counts.urgent} icon="warning" color={colors.ember} onPress={() => setFilter('Urgent')} />
-              <Metric label="Resolved" value={counts.resolved} icon="checkmark-circle" color={colors.green} onPress={() => setFilter('Resolved')} />
+              <Metric label="Active" value={counts.active} icon="pulse" color={colors.gold} onPress={() => setFilter('All')} />
+              <Metric label="New" value={counts.new} icon="notifications" color={colors.goldLight} onPress={() => setFilter('New')} />
+              <Metric label="Urgent" value={counts.urgent} icon="warning" color={colors.urgent} onPress={() => setFilter('Urgent')} />
+              <Metric label="Resolved" value={counts.resolved} icon="checkmark-circle" color={colors.ivory} onPress={() => setFilter('Resolved')} />
             </View>
             {approvals > 0 ? (
               <Pressable style={s.approvals} onPress={() => setFilter('Approval')} accessibilityRole="button">
-                <Ionicons name="cash" size={20} color="#1E3A8A" />
+                <Ionicons name="cash" size={20} color={colors.goldLight} />
                 <Text style={s.approvalsText}>
                   {approvals} cost approval{approvals === 1 ? '' : 's'} waiting for you
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color="#1E3A8A" />
+                <Ionicons name="chevron-forward" size={18} color={colors.goldLight} />
               </Pressable>
             ) : null}
             <Text style={s.section}>Incident Queue</Text>
@@ -129,7 +129,7 @@ export default function ManagerDashboard() {
         }
         ListEmptyComponent={
           <View style={s.empty}>
-            <Ionicons name="checkmark-done-circle" size={42} color="#94A3B8" />
+            <Ionicons name="checkmark-done-circle" size={42} color={colors.muted} />
             <Text style={s.emptyText}>No cases in this view.</Text>
           </View>
         }
@@ -184,31 +184,31 @@ function Metric({ label, value, icon, color, onPress }: {
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.page },
   content: { padding: 16, paddingBottom: 40 },
-  centerText: { textAlign: 'center', fontSize: 15, lineHeight: 22, color: colors.body },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.1, color: colors.teal, marginTop: 4 },
-  subtitle: { fontSize: 15, lineHeight: 21, color: '#52606D', marginTop: 5, marginBottom: 14 },
-  error: { color: colors.emberDark, marginBottom: 10 },
+  centerText: { textAlign: 'center', fontSize: 15, lineHeight: 22, color: colors.body, fontFamily: fonts.regular },
+  eyebrow: { fontSize: 10, letterSpacing: 1.1, color: colors.gold, marginTop: 4, fontFamily: fonts.label },
+  subtitle: { fontSize: 15, lineHeight: 21, color: colors.body, marginTop: 5, marginBottom: 14, fontFamily: fonts.regular },
+  error: { color: colors.urgentText, marginBottom: 10 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  metric: { flexGrow: 1, flexBasis: '45%', backgroundColor: '#fff', padding: 15, borderRadius: 14, borderWidth: 1, borderColor: colors.line },
-  metricValue: { fontSize: 27, fontWeight: '800', color: colors.ink, marginTop: 6 },
-  metricLabel: { fontSize: 13, color: colors.muted },
-  section: { fontSize: 20, fontWeight: '800', color: colors.ink, marginTop: 24, marginBottom: 10 },
+  metric: { flexGrow: 1, flexBasis: '45%', backgroundColor: colors.card, padding: 15, borderRadius: radius, borderWidth: 1, borderColor: colors.line },
+  metricValue: { fontSize: 28, color: colors.ink, marginTop: 6, fontFamily: fonts.bold },
+  metricLabel: { fontSize: 13, color: colors.muted, fontFamily: fonts.regular },
+  section: { fontSize: 24, color: colors.ink, marginTop: 24, marginBottom: 10, fontFamily: fonts.serif },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.line },
-  chipActive: { backgroundColor: colors.navy },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#334155' },
-  chipTextActive: { color: '#fff' },
-  card: { backgroundColor: '#fff', borderRadius: 14, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: colors.line },
-  cardUrgent: { borderColor: '#FDBA74', borderLeftWidth: 5, borderLeftColor: colors.ember },
+  chip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: radius, backgroundColor: colors.line },
+  chipActive: { backgroundColor: colors.gold },
+  chipText: { fontSize: 12, color: colors.body, fontFamily: fonts.bold },
+  chipTextActive: { color: colors.onAccent },
+  card: { backgroundColor: colors.card, borderRadius: radius, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: colors.line },
+  cardUrgent: { borderColor: colors.urgent, borderLeftWidth: 5, borderLeftColor: colors.urgent },
   cardTop: { flexDirection: 'row', gap: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.ink },
-  meta: { fontSize: 12, color: colors.muted, marginTop: 4 },
+  cardTitle: { fontSize: 20, color: colors.ink, fontFamily: fonts.serif, fontVariant: ['lining-nums'] },
+  meta: { fontSize: 12, color: colors.muted, marginTop: 4, fontFamily: fonts.regular },
   cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  vendor: { flex: 1, fontSize: 12, color: colors.muted, textAlign: 'right' },
-  approvals: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#93C5FD', borderRadius: 12, padding: 14, marginTop: 12 },
-  approvalsText: { flex: 1, fontWeight: '800', color: '#1E3A8A' },
-  approvalBadge: { backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
-  approvalBadgeText: { fontSize: 10, fontWeight: '900', color: '#1E3A8A' },
+  vendor: { flex: 1, fontSize: 12, color: colors.muted, textAlign: 'right', fontFamily: fonts.regular },
+  approvals: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.goldDeep, borderWidth: 1, borderColor: colors.gold, borderRadius: radius, padding: 14, marginTop: 12 },
+  approvalsText: { flex: 1, color: colors.goldLight, fontFamily: fonts.bold },
+  approvalBadge: { backgroundColor: colors.goldDeep, paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius },
+  approvalBadgeText: { fontSize: 10, color: colors.goldLight, fontFamily: fonts.bold },
   empty: { alignItems: 'center', padding: 36, gap: 8 },
   emptyText: { color: colors.muted },
 });
