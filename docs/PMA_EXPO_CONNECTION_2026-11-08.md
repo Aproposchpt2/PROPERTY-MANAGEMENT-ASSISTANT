@@ -58,10 +58,16 @@
 - Fix: `netlify/functions/pma-manager-api.js` on `main` strips `notify_resident` before the RPC. Commit `d13cb1a`. 147/147 tests passed. Deployed and ready.
 - Texting the resident from the app is not live until the mobile backend on this branch is deployed.
 
-### Known app issue for the next build
 
-- `src/app/manager/login.tsx` resets the code step on any `onChangeText` of the email field. Android keyboards (autocorrect or suggestions) can trigger this, which hides the code box.
-- Fix: reset only when the email text actually changes.
+## Second Android build: stay signed in (November 8)
+
+- **Cause of repeated sign-outs:** Android SecureStore can fail to save values over about 2 KB, and the Supabase session is larger. The session was never saved, so staff had to request a new email code every time the app closed.
+- **Fix** (commit `75b6938`):
+  - `mobile/src/lib/supabase.ts` stores the session in SecureStore in chunks of up to 1,800 characters, plus a count key. Values saved before the change are still read.
+  - `mobile/src/app/manager/login.tsx` resets the code step only when the email text actually changes. Before, keyboard autocorrect hid the code box.
+- **Build** `bd2ffc72-cdaa-44d4-8d30-66df231d1b92` (internal APK, same keystore; it installs over the previous version). The owner installed it and signed in. Mobile tsc is clean, tests 16/16.
+- **Optional later:** email and password sign-in (no email codes) if the owner still wants it. Each dashboard account would need a password set.
+- Do not change the sign-in or session code without owner approval.
 
 ## Remaining blockers (not done)
 
