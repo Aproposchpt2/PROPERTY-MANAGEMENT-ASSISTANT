@@ -298,3 +298,31 @@ spaced gold labels; DM Sans 400 for text and 600 for buttons and counts. Full co
 blueprint section 3A.
 
 Verified: typecheck clean, mobile 16/16, web walkthrough unchanged, staff app and iPhone/Android bundles build.
+
+---
+
+## 13. Expo login, signing key, first Android build and device test (later on 2026-11-08)
+
+Full details are in `docs/PMA_EXPO_CONNECTION_2026-11-08.md`.
+
+| Item | Result |
+|---|---|
+| EAS CLI login | `stellar_pma` (Owner), via device login approved by the owner |
+| `mobile/eas.json` | `EXPO_PUBLIC_BUSINESS_NAME` = `Desert Ridge` (commit `46b57a8`) |
+| Android signing key | Created by EAS and stored on Expo (remote credentials); not in the repo |
+| Build `5d6e3228-ad36-4b00-bbc6-f0fb426a1529` | Internal APK, versionCode 2, FINISHED, installed on the owner's Android phone |
+| Device test | Sign-in, dashboard, case details, assign provider and sign-out pass. Case update failed and was fixed on production. Approvals not tested. Push not configured. |
+| Production hotfix | `main` `d13cb1a`: `pma-manager-api.js` strips `notify_resident` before `pma_mgr_case_update_v1` |
+
+Changes on `main` from November 7, made outside this branch. Reconcile them before merging the mobile backend.
+- PMA texts send from (725) 201-0584: `PMA_SMS_FROM_NUMBER` is passed together with the Messaging Service in `lib/pma-sms.js`.
+- An SMS destination equal to one of our own lines is replaced with the caller ID (`ownLineToCaller` in `cedar-elevenlabs.js`).
+- `PMA_VENDOR_FROM` = +17252010584 (owner change in Netlify).
+
+Still open:
+- Mobile backend deployment (owner review)
+- Firebase/FCM for Android push
+- iOS: Apple organization enrollment submitted, approval pending
+- Approvals device test
+- ESLint configuration
+- The approved tabbed phone layout and common-entry drop-downs (not built yet)
