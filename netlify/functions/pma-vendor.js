@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { sendVendorApprovalRequest, sendVendorSms } = require('./lib/pma-sms');
+const { pushApprovalNeeded } = require('./lib/pma-push');
 
 const CORS = {
   'content-type': 'application/json',
@@ -258,6 +259,14 @@ exports.handler = async function handler(event) {
           });
         }
       }
+      // Push to managers' phones as well (best effort; texts above are unchanged).
+      let pushed = false;
+      if (data && data.success && !isApproved) {
+        const push = await pushApprovalNeeded({
+          env, requestId: data.requestId || null, caseNumber: data.caseNumber || body.case_number, amount,
+        });
+        pushed = push.sent > 0;
+      }
       if (data && data.success) {
         // Plain fields for Avery; never expose approver contact details to the caller.
         return json(200, {
@@ -266,7 +275,7 @@ exports.handler = async function handler(event) {
           amount: data.amount,
           approvalState: isApproved ? 'APPROVED' : 'PENDING',
           approvalChannel: data.approvalChannel || null,
-          managerNotified: notified > 0,
+          managerNotified: notified > 0 || pushed,
         });
       }
       return json(200, data);

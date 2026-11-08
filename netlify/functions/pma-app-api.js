@@ -14,6 +14,7 @@
 const { createStore } = require('./lib/cedar-store');
 const { escalateEmergency, confirmBySms, confirmByEmail, issuePortalLink } = require('./lib/pma-intake-flow');
 const { normalizeNanpPhone, newCode, createChallenge, checkChallenge } = require('./lib/pma-app-verify');
+const { pushNewCase } = require('./lib/pma-push');
 
 const HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' };
 const reply = (statusCode, body) => ({ statusCode, headers: HEADERS, body: JSON.stringify(body) });
@@ -130,7 +131,10 @@ async function fileRequest(body, ip, env) {
           : 'Your request was not filed. Please try again or call the property line.',
       });
     }
-    await escalateEmergency({ result, args: v.fields, callerPhone: phone, env });
+    await Promise.all([
+      escalateEmergency({ result, args: v.fields, callerPhone: phone, env }),
+      pushNewCase({ result, args: v.fields, env }),
+    ]);
 
     let notice = { notificationSent: false, notificationState: 'NOT_SENT', portalLink: null };
     try {

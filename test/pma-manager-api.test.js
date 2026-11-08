@@ -181,3 +181,20 @@ test('PATCH with notify_resident reports the notification outcome', async () => 
   assert.deepEqual(JSON.parse(res.body).notification, { sent: false, state: 'FAILED', method: null });
   rpcOverride = null;
 });
+
+test('push-token: DELETE allowed only there; invalid tokens rejected before any DB access', async () => {
+  authOverride = null;
+  assert.equal((await handler(makeEvent('DELETE', '/api/manager/cases/req_1'))).statusCode, 405);
+  assert.equal((await handler(makeEvent('POST', '/api/manager/push-token', { token: 'not-a-token', platform: 'ios' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('POST', '/api/manager/push-token', { token: 'ExponentPushToken[abc]', platform: 'web' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('DELETE', '/api/manager/push-token', { token: 'x' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('GET', '/api/manager/push-token'))).statusCode, 405);
+});
+
+test('push-test reports DISABLED when push is off', async () => {
+  authOverride = null;
+  delete process.env.PMA_PUSH_ENABLED;
+  const res = await handler(makeEvent('POST', '/api/manager/push-test', {}));
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).state, 'DISABLED');
+});

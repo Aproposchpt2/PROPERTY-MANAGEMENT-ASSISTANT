@@ -100,9 +100,32 @@ Adding or editing providers and pre-approval limits stays on the web dashboard.
 | **Cost approval fields** | `GET /api/manager/cases` and `/cases/:id` | Adds `nteAmount` and `approvalState`. The live case RPCs don't return them, so the web dashboard's approval badges never showed; they now do |
 | Senders | `lib/pma-sms.js`, `lib/pma-email.js` | New `sendResidentUpdate` (text honours STOP opt-outs; email HTML-escapes the update) |
 
+### Push notifications to managers
+
+| Alert | When | Sent from | Android channel |
+|---|---|---|---|
+| Emergency | A case is flagged urgent (call or app) | `cedar-elevenlabs.js`, `pma-app-api.js` via `pushNewCase` | `emergency` (max importance) |
+| New case | Any other new case (call or app) | same | `cases` |
+| Cost approval | A provider's quote is over the pre-approved limit | `pma-vendor.js` (`request_nte`) via `pushApprovalNeeded` | `cases` |
+
+- **Who gets them:** active OWNER and ADMIN users of the tenant, and MANAGER users with access to the
+  property (the same rule as manager sign-in), filtered by each phone's preferences.
+- **Phones:** after the server confirms manager access, the app asks for permission and registers its Expo
+  push token (`POST /api/manager/push-token`). Signing out removes it (`DELETE`). The **Alerts** screen
+  (bell on the dashboard) has a switch per alert type and **Send a test notification** (`POST /api/manager/push-test`,
+  own phones only). Tapping an alert opens that case, including when the tap launches the app.
+- **Storage:** `pma_push_tokens` (migration `20261108100000_pma_push_tokens.sql`): RLS on, service role only;
+  one row per token; a token that moves to another manager's sign-in moves with it.
+- **Delivery:** Expo push service (`exp.host`), 100 per request, 5-second timeout; tokens Expo reports as
+  `DeviceNotRegistered` are switched off. Best effort: a push failure never delays or fails filing a case,
+  and staff texts continue unchanged. On a normal call the push runs during Ava's existing pause, so callers
+  wait no longer.
+- **Switch:** nothing is sent unless `PMA_PUSH_ENABLED=true`. Lock-screen text mirrors the existing staff
+  texts: case number and unit for new cases; address and a short description for emergencies.
+
 Approve/Decline uses the existing `POST /cases/:id/approve` (`pma_mgr_approve_case_v1`, live in
 Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the existing
-`POST /cases/:id/assign`. No database changes.
+`POST /cases/:id/assign`. The only database change in phase 2 is the push token table.
 
 ---
 
@@ -125,6 +148,7 @@ Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the
 | `src/app/manager/login.tsx`, `index.tsx` | Manager sign-in, dashboard | 2 |
 | `src/app/manager/[id].tsx` | Case: approval, provider, status, resident update, notes, timeline | 2 |
 | `src/app/manager/assign.tsx` | Assign provider and visit window | 2 |
+| `src/app/manager/alerts.tsx` | Push alert switches and test notification | 2 |
 
 Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/test/`).
 
@@ -156,7 +180,11 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
   PATCH flag); mobile **15/15**. Manager screens run on Expo web against a mocked API: approval banner
   and filter, approval card, assign screen sending provider + 2-hour window + work order, return to the
   case without losing a half-typed update, and save sending `notify_resident: true`.
-- **Not yet done:** real device, real texts, a real case in Supabase.
+- **Push:** root suite **181/181** (9 tests for recipients by role, property access and preference;
+  channel and data; dead-token switch-off; Expo outage; replay skip; registration, shared phones, removal
+  and test push; 2 route tests); mobile **16/16**. Android bundle builds with notifications; the web build
+  loads (notifications are skipped in a browser) and the resident flow is unchanged.
+- **Not yet done:** real device, real texts, real push delivery, a real case in Supabase.
 
 ---
 
@@ -188,10 +216,17 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
    non-manager (access message only), and "send to resident" by text and by email on a test case.
    Check a declined approval and an assignment with and without a visit time.
 9. **Build:** `EXPO_PUBLIC_ENABLE_MANAGER=true` for the release that includes managers.
-10. **Manager push notifications** (new case, emergency, approval waiting). Needs `eas init` (push needs
-    an EAS project id), `npx expo install expo-notifications`, a `pma_push_tokens` table (RLS on,
-    service-role only) applied to a Supabase branch first, a `POST /api/manager/push-token` route, and
-    sends alongside the existing staff texts. Until then managers keep getting staff texts.
+10. **Turn on manager push notifications** (built):
+    1. Apply `supabase/migrations/20261108100000_pma_push_tokens.sql` (rollback file alongside).
+    2. In `mobile/`: `npx eas-cli@latest init` (writes the EAS project id into `app.json`; push tokens need it).
+    3. Android: add Firebase (FCM) credentials to the EAS project (`eas credentials`). iOS: EAS creates the
+       push key during the first iOS build.
+    4. Build a development or preview build (`eas build --profile development`). Remote push does not work
+       in Expo Go on Android.
+    5. Netlify: `PMA_PUSH_ENABLED=true`; optionally `EXPO_ACCESS_TOKEN` if "enhanced push security" is
+       turned on for the EAS project. Deploy.
+    6. Sign in on a phone, allow notifications, use **Send a test notification**, then file a test request
+       (normal and emergency wording) and a test quote over the limit.
 11. **Bring the repo in line with the live database:** add a migration capturing
     `pma_mgr_approve_case_v1` as deployed, and remove or rename the unused 4-argument case functions
     in `20261029110000_pma_approval_rpcs.sql`, which differ from what is live.
@@ -213,6 +248,8 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Netlify | `PMA_APP_VERIFY_SECRET` | **New.** Random, ≥ 32 characters. Signs phone-check codes |
 | Netlify | `PMA_SMS_ENABLED`, `PMA_EMAIL_ENABLED` | Existing; same meaning as for calls |
 | Netlify | `PMA_SMS_FROM_NUMBER`, `PMA_SMS_MESSAGING_SERVICE_SID`, Twilio keys | Existing; codes are sent from PMA's line |
+| Netlify | `PMA_PUSH_ENABLED` | **New.** `true` to send manager push notifications |
+| Netlify | `EXPO_ACCESS_TOKEN` | **New, optional.** Only if enhanced push security is on for the EAS project |
 | App | `EXPO_PUBLIC_PMA_API_BASE` | `https://pma.stellaruc.com` |
 | App | `EXPO_PUBLIC_PMA_PHONE` | Property line shown to residents |
 | App | `EXPO_PUBLIC_ENABLE_MANAGER` | `false` for the phase 1 resident release; `true` once managers are included |
@@ -227,7 +264,9 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Rate limits per instance | Step 6 above |
 | Single property | Inherited from the voice path (`PMA_TENANT_ID`, `PMA_PROPERTY_ID`) |
 | Repo vs live approval functions | `pma_mgr_approve_case_v1` exists only in the live database; the repo's 4-argument case functions are not what is live (step 11) |
-| Manager push notifications | Step 10; staff texts continue meanwhile |
+| Push needs setup outside the code | EAS project id, FCM credentials, the token table and `PMA_PUSH_ENABLED` (step 10) |
+| Push receipts | Only Expo's immediate tickets are checked; later delivery receipts (e.g. Apple or Google rejecting a message) are not polled |
+| iOS critical alerts | Emergencies use normal iOS alerts; bypassing silent mode needs an Apple entitlement |
 | Approve/Decline on Expo web | Confirmation pop-ups don't show in a browser build; managers on a computer use `manager.html` |
 | Expo web against production | APIs send no CORS headers; web is for layout checks only |
 | `npx expo install` online check | Blocked in the cloud build environment; run `npx expo install --check` on a developer machine |

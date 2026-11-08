@@ -18,6 +18,7 @@
 const crypto = require('node:crypto');
 const { createStore } = require('./lib/cedar-store');
 const { issuePortalLink, escalateEmergency, confirmBySms, confirmByEmail } = require('./lib/pma-intake-flow');
+const { pushNewCase } = require('./lib/pma-push');
 
 function safeEqual(a, b) {
   const ba = Buffer.from(a);
@@ -228,6 +229,9 @@ async function handle(event, ctx = {}) {
         ...(lang ? { language: lang } : {}),
       };
       const result = await store.createIncident({ session_id, call_sid, args });
+      // Manager push runs alongside the pause and the escalation texts, and is awaited
+      // before returning (Lambda freezes promises left running). Never throws.
+      const pushing = pushNewCase({ result, args, env });
       if (result && result.success && !result.urgentReviewRequired) {
         const raw = Number(env.PMA_CREATE_DELAY_MS);
         const delayMs = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 4000) : 2500;
@@ -238,6 +242,7 @@ async function handle(event, ctx = {}) {
       // so fire-and-forget never reached Twilio. Awaiting adds ~1s to Ava's
       // response — acceptable for an emergency.
       await escalateEmergency({ result, args, callerPhone: caller_number_raw, env });
+      await pushing;
       return respond(result || { success: false, state: 'UNKNOWN', reply: 'The operation was not confirmed. Do not invent success or a number.' });
     }
     if (tool_name === 'record_contact_preference') {

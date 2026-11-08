@@ -38,5 +38,7 @@ Checks: `npm run typecheck` and `npm test`. Add packages with `npx expo install 
 - `src/app/status.tsx`: case status; also opens from `pma://status?t=TOKEN`
 - `src/app/manager/*` (phase 2, on with `EXPO_PUBLIC_ENABLE_MANAGER=true`): dashboard with approval
   banner and filters; case screen with cost approval, provider, status, resident update (optionally
-  texted or emailed to the resident) and notes; assign-provider screen with visit windows. Managers
+  texted or emailed to the resident) and notes; assign-provider screen with visit windows; Alerts screen
+  for push notifications (emergency, new case, cost approval). Push needs a development or store build
+  (not Expo Go on Android) and `npx eas-cli@latest init` for the project id; see the blueprint. Managers
   sign in with an emailed code, so the Supabase "Magic Link" email template must include `{{ .Token }}`.

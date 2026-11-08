@@ -51,3 +51,12 @@ test('save messages say whether the resident was messaged', () => {
   assert.match(savedMessage(true, { state: 'DISABLED', method: 'sms' }), /turned off/);
   assert.match(savedMessage(true, { state: 'FAILED', method: 'email' }), /could not be sent/);
 });
+
+test('notification tap opens only a well-formed case id', async () => {
+  const { notificationCaseId } = await import('../src/lib/cases.ts');
+  assert.equal(notificationCaseId({ requestId: '3f2b8c1e-9a4d-4e2b-8f6a-1c2d3e4f5a6b', kind: 'emergency' }), '3f2b8c1e-9a4d-4e2b-8f6a-1c2d3e4f5a6b');
+  assert.equal(notificationCaseId({ requestId: '../../admin' }), null);
+  assert.equal(notificationCaseId({ kind: 'test' }), null);
+  assert.equal(notificationCaseId(null), null);
+  assert.equal(notificationCaseId('x'), null);
+});

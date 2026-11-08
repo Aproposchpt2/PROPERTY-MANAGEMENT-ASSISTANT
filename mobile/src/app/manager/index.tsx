@@ -8,6 +8,9 @@ import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/session';
 import { Button, Centered, PriorityBadge, StatusBadge } from '../../components/ui';
 import { colors } from '../../lib/theme';
+import { registerForPush, unregisterPush } from '../../lib/push';
+
+let pushRegistered = false; // once per app session and sign-in
 
 export default function ManagerDashboard() {
   const { session } = useSession();
@@ -22,6 +25,11 @@ export default function ManagerDashboard() {
     try {
       setCases(await listCases());
       setError(null);
+      // The server has just confirmed manager access: register this phone for alerts once per sign-in.
+      if (!pushRegistered) {
+        pushRegistered = true;
+        registerForPush().catch(() => {});
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, 'Something went wrong. Try again.'));
     } finally {
@@ -35,13 +43,23 @@ export default function ManagerDashboard() {
   const counts = useMemo(() => caseCounts(cases), [cases]);
   const approvals = useMemo(() => cases.filter(needsApproval).length, [cases]);
   const visible = useMemo(() => filterCases(cases, filter), [cases, filter]);
-  const signOut = () => supabase.auth.signOut();
+  // Stop alerts to this phone first, while the session can still authorize the request.
+  const signOut = async () => {
+    await unregisterPush();
+    pushRegistered = false;
+    await supabase.auth.signOut();
+  };
 
   const header = <Stack.Screen options={{
     headerRight: () => (
-      <Pressable onPress={signOut} accessibilityRole="button" hitSlop={10} style={{ paddingHorizontal: 12 }}>
-        <Text style={{ color: '#fff', fontWeight: '700' }}>Sign out</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable onPress={() => router.push('/manager/alerts')} accessibilityRole="button" accessibilityLabel="Alerts" hitSlop={10} style={{ paddingHorizontal: 10 }}>
+          <Ionicons name="notifications-outline" size={22} color="#fff" />
+        </Pressable>
+        <Pressable onPress={signOut} accessibilityRole="button" hitSlop={10} style={{ paddingHorizontal: 12 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Sign out</Text>
+        </Pressable>
+      </View>
     ),
   }} />;
 

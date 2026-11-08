@@ -173,6 +173,13 @@ export function hourLabel(h: number): string {
   return `${h % 12 === 0 ? 12 : h % 12}${h >= 12 ? 'pm' : 'am'}`;
 }
 
+// The case a manager's push notification points to (data.requestId, a UUID). Anything else is ignored.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function notificationCaseId(data: unknown): string | null {
+  const id = data && typeof data === 'object' ? (data as { requestId?: unknown }).requestId : null;
+  return typeof id === 'string' && UUID_RE.test(id) ? id : null;
+}
+
 // What the manager is told after saving, including whether the resident was messaged.
 export function savedMessage(updatedResidentText: boolean, notification?: { state: string; method?: string | null }): string {
   if (!updatedResidentText) return 'Case updated.';

@@ -28,6 +28,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="index" options={{ title: 'Manager Dashboard' }} />
         <Stack.Screen name="[id]" options={{ title: 'Case' }} />
         <Stack.Screen name="assign" options={{ title: 'Assign Provider' }} />
+        <Stack.Screen name="alerts" options={{ title: 'Alerts' }} />
       </Stack.Protected>
     </Stack>
   );

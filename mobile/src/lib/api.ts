@@ -79,6 +79,25 @@ export async function assignVendor(id: string, a: Assignment) {
   return d;
 }
 
+// Manager push notifications: which alerts this phone gets.
+export type PushPrefs = { newCase: boolean; emergency: boolean; approval: boolean };
+
+export async function registerPushToken(token: string, platform: 'ios' | 'android', prefs?: PushPrefs) {
+  return request<{ success: boolean; prefs: PushPrefs; enabled: boolean }>(
+    '/api/manager/push-token',
+    { method: 'POST', body: JSON.stringify({ token, platform, ...(prefs ? { prefs } : {}) }) },
+    true,
+  );
+}
+
+export async function removePushToken(token: string) {
+  return request<{ success: boolean }>('/api/manager/push-token', { method: 'DELETE', body: JSON.stringify({ token }) }, true);
+}
+
+export async function sendTestPush() {
+  return request<{ success: boolean; state: string }>('/api/manager/push-test', { method: 'POST', body: '{}' }, true);
+}
+
 // Answer a pending not-to-exceed (cost) approval.
 export async function answerApproval(id: string, response: 'APPROVED' | 'DECLINED') {
   const d = await request<{ success: boolean }>(

@@ -1,12 +1,16 @@
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider } from '../lib/session';
 import { colors } from '../lib/theme';
+import { MANAGER_ENABLED } from '../lib/config';
+import { NotificationRouter } from '../components/NotificationRouter';
 
 export default function RootLayout() {
   return (
     <SessionProvider>
       <StatusBar style="light" />
+      {MANAGER_ENABLED && Platform.OS !== 'web' ? <NotificationRouter /> : null}
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.navy },

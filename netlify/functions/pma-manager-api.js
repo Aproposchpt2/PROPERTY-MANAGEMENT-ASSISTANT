@@ -3,6 +3,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { verifyManager } = require('./lib/pma-auth');
 const { notifyResident, addApprovalFields } = require('./lib/pma-resident-notify');
+const { registerDevice, removeDevice, sendTestPush } = require('./lib/pma-push');
 
 const CORS = {
   'content-type': 'application/json',
@@ -34,7 +35,8 @@ function makeRpc(env, db) {
 
 exports.handler = async function handler(event) {
   const env = process.env;
-  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod)) {
+  const isPushToken = /\/api\/manager\/push-token\/?$/.test(event.path || '');
+  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod) && !(isPushToken && event.httpMethod === 'DELETE')) {
     return json(405, { error: 'Method not allowed' });
   }
   const auth = await verifyManager(event, env);
@@ -55,6 +57,21 @@ exports.handler = async function handler(event) {
   const rpc = makeRpc(env, db);
   const scope = { db, tenantId: env.PMA_TENANT_ID, propertyId: env.PMA_PROPERTY_ID };
   try {
+    // POST /api/manager/push-token  { token, platform, prefs? }  register this phone / save preferences
+    // DELETE /api/manager/push-token { token }                   remove this phone (sign-out)
+    if (action === 'push-token' && !id) {
+      const r = event.httpMethod === 'POST'
+        ? await registerDevice({ db, env, auth, token: body.token, platform: body.platform, prefs: body.prefs })
+        : event.httpMethod === 'DELETE'
+          ? await removeDevice({ db, auth, token: body.token })
+          : { status: 405, body: { error: 'Method not allowed' } };
+      return json(r.status, r.body);
+    }
+    // POST /api/manager/push-test  send a test notification to my own phones
+    if (action === 'push-test' && !id && event.httpMethod === 'POST') {
+      const r = await sendTestPush({ db, env, auth });
+      return json(r.status, r.body);
+    }
     // GET /api/manager/cases
     if (action === 'cases' && !id && event.httpMethod === 'GET') {
       const params = event.queryStringParameters || {};
