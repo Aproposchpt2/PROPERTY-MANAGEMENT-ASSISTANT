@@ -1,0 +1,16 @@
+export const colors = {
+  navy: '#071B33',
+  teal: '#0E7490',
+  ember: '#C2410C',
+  emberDark: '#9A3412',
+  emberSoft: '#FFEDD5',
+  green: '#15803D',
+  blue: '#2563EB',
+  ink: '#0F172A',
+  body: '#1E293B',
+  muted: '#64748B',
+  line: '#E2E8F0',
+  field: '#CBD5E1',
+  page: '#F1F5F9',
+  card: '#FFFFFF',
+};

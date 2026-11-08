@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Property Management Assistant",
+    "slug": "property-management-assistant",
+    "scheme": "pma",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stellar.pma"
+    },
+    "android": {
+      "package": "com.stellar.pma",
+      "adaptiveIcon": {
+        "backgroundColor": "#071B33",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ]
+  }
+}
