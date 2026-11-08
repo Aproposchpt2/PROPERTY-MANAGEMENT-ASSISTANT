@@ -2,6 +2,12 @@
   "expo": {
     "name": "Property Management Assistant",
     "slug": "property-management-assistant",
+    "owner": "stellar-intelligent-software-developers",
+    "extra": {
+      "eas": {
+        "projectId": "03efdc88-5ec0-4c61-a504-4c1a3d1cd45f"
+      }
+    },
     "scheme": "pma",
     "version": "1.0.0",
     "orientation": "portrait",
