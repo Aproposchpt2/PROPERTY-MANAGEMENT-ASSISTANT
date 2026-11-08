@@ -77,7 +77,7 @@
 4. **Approvals test** with a case that needs cost approval.
 5. **Lint.** There is no ESLint configuration. `expo lint` setup timed out earlier.
 
-## Approved next update (owner, November 8, not yet built)
+## Approved tabbed UI update (owner, November 8)
 
 - **Phone layout with tabs.**
   - Bottom tabs: Cases, Approvals (with count), Alerts, Account (sign-out, web dashboard link, version).
@@ -86,7 +86,7 @@
   - Keep the black, gold and white branding and the existing API calls.
 - **Common-entry drop-downs**, on both the mobile app and the web dashboard (`manager.html`).
   - Proposed new statuses: Waiting on Parts, Waiting on Tenant Access, On Hold.
-  - Preset tenant updates and internal notes that fill the text box and stay editable. Confirm both lists with the owner before building.
+  - Preset tenant updates and internal notes that fill the text box and stay editable. The owner authorized the lists below in the tabbed UI task.
   - Proposed tenant updates:
     - "We received your request and are reviewing it."
     - "A technician has been assigned to your request."
@@ -102,3 +102,53 @@
     - "Quote approved."
     - "Follow-up needed."
     - "Duplicate of another case."
+
+
+## Tabbed UI implementation — November 8, 2026
+
+Based on branch commit `75b6938`. Code and checks only; the owner starts the next Android build and reviews the Netlify preview after the branch push.
+
+### Behavior
+
+- Signed-in team navigation now has bottom tabs: Cases, Approvals (pending count badge), Alerts, Account. Existing case and assignment URLs stay in the protected stack. The existing Alerts screen moved into the tab group.
+- Cases has top filter tabs: Open, Emergency, Scheduled, Completed. Open includes every unresolved status, including waiting and on hold; Completed includes Completed and Closed. Emergency uses the existing emergency/urgent/high priority rule and excludes resolved cases.
+- Approvals uses the same pending predicate for its queue and badge. Shared case data refreshes on tab focus, return from case details and pull-to-refresh. Errors clear stale case data and counts and offer retry/sign-out as appropriate.
+- Account contains the existing sign-out operation (including device-alert removal), the web dashboard link, signed-in email and configured app version. Sign-in and session implementation files are unchanged.
+- Case details now have Overview, Update, Provider and Activity tabs. Unsaved editable fields stay in parent state when switching case tabs or returning from assignment. A refreshed server status replaces the form status only if staff have not changed that selection, avoiding accidental reversal of assignment/approval status changes.
+- Mobile status uses a modal drop-down with nine choices. Tenant update and internal note selectors fill the editable text fields; they do not save or send anything. Cancel leaves the draft alone. Existing save, notification, approval and assignment calls remain in use.
+- `manager.html` offers the same nine statuses, seven tenant-update presets and six internal-note presets. Preset selection fills only its corresponding editable field; Save remains explicit. User-supplied content is escaped when options are rendered.
+- Waiting states are staff status choices, not sequential resident milestones; the resident progress tracker remains unchanged.
+
+### Files
+
+- `mobile/src/app/manager/_layout.tsx`: existing protected stack points to the signed-in tab group; auth guards unchanged.
+- `mobile/src/app/manager/(tabs)/_layout.tsx`: bottom tabs and approval badge.
+- `mobile/src/app/manager/(tabs)/index.tsx`, `approvals.tsx`, `account.tsx`: tab screens.
+- `mobile/src/app/manager/alerts.tsx` moved to `mobile/src/app/manager/(tabs)/alerts.tsx`; import paths and JSX escaping adjusted.
+- `mobile/src/app/manager/index.tsx` replaced by the Cases tab plus `mobile/src/components/CaseQueue.tsx`.
+- `mobile/src/app/manager/[id].tsx`: four case tabs, editable preset selectors and draft retention.
+- `mobile/src/components/manager-controls.tsx`: reusable top tabs and accessible modal drop-down.
+- `mobile/src/lib/manager-cases.tsx`: shared case-list UI state, refresh and existing device-aware sign-out operation.
+- `mobile/src/lib/manager-entries.ts`: staff status/preset wording.
+- `mobile/src/lib/cases.ts`: phone queue filter helpers; resident lifecycle choices unchanged.
+- `manager.html`: status/preset drop-downs and fill-only behavior.
+- `mobile/test/phone-queue.test.mjs`: queue filtering and approval-refresh regressions.
+- `test/manager-presets.test.js`: web/mobile choice parity, fill-only draft behavior, option escaping and dashboard script syntax.
+- This status document.
+
+### Checks
+
+- `cd mobile && npx tsc --noEmit`: passed.
+- `cd mobile && npm test`: 19/19 passed (16 existing, 3 added).
+- Root `npm test`: 190/190 passed (187 existing, 3 added for the dashboard UI).
+- Changed mobile UI files lint clean using SDK 58's Expo ESLint flat configuration supplied temporarily outside the repository. The project still has no committed ESLint configuration. An initial whole-manager lint also identified the pre-existing unescaped apostrophe in `login.tsx`; that file was left untouched as directed. No package or lockfile changes are included.
+- `git diff --check`: passed.
+- API, sign-in/session implementation and backend/migration files have no changes.
+
+### Owner review and build
+
+- Keep draft PR #31 open and unmerged.
+- Review after push: https://deploy-preview-31--property-management-assistant.netlify.app/app/manager
+- Expo dashboard: **Build from GitHub → branch `claude/new-session-ykm5xi` → Android → profile `internal`**.
+- Confirm bottom-tab navigation, approval badge after an approval, all four case tabs, editable presets, returning from assignment without losing drafts, and sign-out on the next device build.
+- No browser/device preview, Expo build, production deploy or database verification was performed for this UI task. Acceptance of the three new status strings by the deployed database remains to be verified during owner review; no database change was made.

@@ -1,18 +1,24 @@
 import { useCallback, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiError, answerApproval, getCase, updateCase, type CasePatch } from '../../lib/api';
-import { CASE_STATUSES, eventLabel, formatMoney, formatWhen, isUrgent, needsApproval, savedMessage, type CaseDetail } from '../../lib/cases';
+import { eventLabel, formatMoney, formatWhen, isUrgent, needsApproval, savedMessage, type CaseDetail } from '../../lib/cases';
 import { Button, Card, Centered, Label, PriorityBadge, StatusBadge } from '../../components/ui';
 import { colors, fonts, radius } from '../../lib/theme';
 import { confirmAction, showMessage } from '../../lib/dialog';
+
+import { EntrySelect, SectionTabs } from '../../components/manager-controls';
+import { MANAGER_STATUSES, TENANT_UPDATE_PRESETS, INTERNAL_NOTE_PRESETS } from '../../lib/manager-entries';
+
+const CASE_TABS = ['Overview', 'Update', 'Provider', 'Activity'] as const;
 
 const MAX_TENANT_UPDATE = 1000;   // matches the pma_maintenance_requests check constraints
 const MAX_INTERNAL_NOTES = 4000;
 
 export default function CaseWorkspace() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [tab, setTab] = useState<(typeof CASE_TABS)[number]>('Overview');
   const [c, setCase] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
@@ -21,7 +27,8 @@ export default function CaseWorkspace() {
   const [saving, setSaving] = useState(false);
   const [notify, setNotify] = useState(true);
   const [answering, setAnswering] = useState(false);
-  const loadedOnce = useRef(false);
+  const loadedCaseId = useRef<string | null>(null);
+  const previousStatus = useRef<string | null>(null);
 
   // resetForm=false refreshes the case (e.g. after assigning a provider) without
   // throwing away an update or notes the manager is still typing.
@@ -29,6 +36,9 @@ export default function CaseWorkspace() {
     try {
       const d = await getCase(String(id));
       setCase(d);
+      const wasStatus = previousStatus.current;
+      previousStatus.current = d.status;
+      if (!resetForm) setStatus(value => value === wasStatus ? d.status : value);
       if (resetForm) {
         setStatus(d.status);
         setTenantUpdate(d.tenantUpdate ?? '');
@@ -42,9 +52,9 @@ export default function CaseWorkspace() {
   }, [id]);
 
   useFocusEffect(useCallback(() => {
-    load(!loadedOnce.current);
-    loadedOnce.current = true;
-  }, [load]));
+    load(loadedCaseId.current !== id);
+    loadedCaseId.current = id;
+  }, [load, id]));
 
   if (error && !c) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>{error}</Text><Button label="Try again" onPress={() => load()} /></Centered>;
   if (!c) return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading case…</Text></Centered>;
@@ -101,7 +111,11 @@ export default function CaseWorkspace() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: c.caseNumber ? `Case ${c.caseNumber}` : 'Case' }} />
-      <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+      <SectionTabs items={CASE_TABS} value={tab} onChange={setTab} />
+      <ScrollView key={`${id}-${tab}`} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
+        {error ? <Text style={s.meta} accessibilityRole="alert">{error}</Text> : null}
+        {tab === 'Overview' ? <>
+        <Text style={s.title}>Case {c.caseNumber || '—'}</Text>
         {urgent ? (
           <View style={s.urgent} accessibilityRole="alert">
             <Ionicons name="warning" size={18} color={colors.ivory} />
@@ -119,7 +133,7 @@ export default function CaseWorkspace() {
           <View style={s.approval} accessibilityRole="alert">
             <Text style={s.approvalTitle}>Cost approval needed</Text>
             <Text style={s.info}>
-              The provider's quote{c.nteAmount != null ? ` of ${formatMoney(c.nteAmount)}` : ''} is over the pre-approved limit for this property.
+              The provider&apos;s quote{c.nteAmount != null ? ` of ${formatMoney(c.nteAmount)}` : ''} is over the pre-approved limit for this property.
             </Text>
             <View style={s.approvalRow}>
               <Button label="Approve" icon="checkmark" onPress={() => confirmApproval('APPROVED')} busy={answering} style={{ flex: 1 }} />
@@ -141,6 +155,8 @@ export default function CaseWorkspace() {
           {c.language && c.language !== 'en' ? <Text style={s.info}>Language: {c.language}</Text> : null}
         </Card>
 
+        </> : null}
+        {tab === 'Provider' ? <>
         <Label>SERVICE PROVIDER</Label>
         <Card style={{ gap: 6 }}>
           <Text style={s.provider}>{c.vendorName ?? 'Not assigned'}</Text>
@@ -157,25 +173,16 @@ export default function CaseWorkspace() {
           />
         </Card>
 
+        </> : null}
+        {tab === 'Update' ? <>
         <Label>STATUS</Label>
-        <View style={s.statuses}>
-          {CASE_STATUSES.map(st => (
-            <Pressable
-              key={st}
-              disabled={saving}
-              onPress={() => setStatus(st)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: status === st }}
-              style={[s.status, status === st && s.statusActive]}
-            >
-              <Text style={[s.statusText, status === st && { color: colors.onAccent }]}>{st}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <EntrySelect label="Status" options={MANAGER_STATUSES} value={status} onSelect={setStatus} disabled={saving} />
 
         <Label>UPDATE FOR THE RESIDENT</Label>
+        <EntrySelect label="Choose a tenant update" options={TENANT_UPDATE_PRESETS} onSelect={setTenantUpdate} disabled={saving} />
         <TextInput placeholderTextColor={colors.muted}
           multiline
+          editable={!saving}
           value={tenantUpdate}
           onChangeText={setTenantUpdate}
           maxLength={MAX_TENANT_UPDATE}
@@ -196,13 +203,15 @@ export default function CaseWorkspace() {
               </Text>
             </Pressable>
           ) : (
-            <Text style={s.meta}>The resident didn't choose text or email, so they'll see this on their status page only.</Text>
+            <Text style={s.meta}>The resident didn&apos;t choose text or email, so they&apos;ll see this on their status page only.</Text>
           )
         ) : null}
 
         <Label>INTERNAL NOTES (STAFF ONLY)</Label>
+        <EntrySelect label="Choose an internal note" options={INTERNAL_NOTE_PRESETS} onSelect={setNotes} disabled={saving} />
         <TextInput placeholderTextColor={colors.muted}
           multiline
+          editable={!saving}
           value={notes}
           onChangeText={setNotes}
           maxLength={MAX_INTERNAL_NOTES}
@@ -212,13 +221,8 @@ export default function CaseWorkspace() {
         />
 
         <Button label={dirty ? 'Save changes' : 'No changes'} onPress={save} busy={saving} disabled={!dirty} />
-        <Text style={s.small}>
-          Add or edit providers and pre-approval limits in the web Management Dashboard.
-        </Text>
-        <Pressable onPress={() => Linking.openURL('https://pma.stellaruc.com/manager')} accessibilityRole="link">
-          <Text style={s.link}>Open the web dashboard</Text>
-        </Pressable>
-
+        </> : null}
+        {tab === 'Activity' ? <>
         {c.timeline?.length ? (
           <>
             <Label>ACTIVITY TIMELINE</Label>
@@ -232,7 +236,8 @@ export default function CaseWorkspace() {
               ))}
             </Card>
           </>
-        ) : null}
+        ) : <Text style={s.meta}>No activity yet.</Text>}
+        </> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -242,19 +247,13 @@ const s = StyleSheet.create({
   body: { padding: 20, gap: 10, paddingBottom: 48 },
   urgent: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: colors.urgent, padding: 12, borderRadius: radius },
   urgentText: { color: colors.ivory, flex: 1, fontFamily: fonts.bold },
-  badges: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   title: { fontSize: 28, color: colors.ivory, fontFamily: fonts.serif },
   meta: { fontSize: 13, color: colors.muted, fontFamily: fonts.regular },
   desc: { fontSize: 16, lineHeight: 23, color: colors.body, fontFamily: fonts.regular },
   info: { fontSize: 14, color: colors.body, fontFamily: fonts.regular },
-  statuses: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  status: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: radius, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.field },
-  statusActive: { backgroundColor: colors.gold, borderColor: colors.gold },
-  statusText: { color: colors.body, fontFamily: fonts.bold },
   input: { backgroundColor: colors.card, minHeight: 100, textAlignVertical: 'top', padding: 14, borderRadius: radius, borderWidth: 1, borderColor: colors.field, fontSize: 15, fontFamily: fonts.regular, color: colors.ink },
   count: { fontSize: 11, color: colors.muted, textAlign: 'right', fontFamily: fonts.regular },
-  small: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 4, fontFamily: fonts.regular },
-  link: { fontSize: 14, color: colors.gold, textAlign: 'center', fontFamily: fonts.bold },
   approval: { backgroundColor: colors.goldDeep, borderWidth: 1, borderColor: colors.gold, borderRadius: radius, padding: 14, gap: 8 },
   approvalTitle: { fontSize: 20, color: colors.goldLight, fontFamily: fonts.serif },
   approvalRow: { flexDirection: 'row', gap: 10 },

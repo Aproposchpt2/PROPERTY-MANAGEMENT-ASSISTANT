@@ -92,11 +92,15 @@ export function caseCounts(cases: readonly CaseSummary[]) {
 }
 
 export const QUEUE_FILTERS = ['All', 'Urgent', 'Approval', 'New', 'Assigned', 'Scheduled', 'In Progress', 'Resolved'] as const;
-export type QueueFilter = (typeof QUEUE_FILTERS)[number];
+export const PHONE_FILTERS = ['Open', 'Emergency', 'Scheduled', 'Completed'] as const;
+export type QueueFilter = (typeof QUEUE_FILTERS)[number] | (typeof PHONE_FILTERS)[number];
 
 export function filterCases(cases: readonly CaseSummary[], filter: QueueFilter): CaseSummary[] {
   switch (filter) {
     case 'All': return [...cases];
+    case 'Open': return cases.filter(c => !isResolved(c.status));
+    case 'Emergency': return cases.filter(c => isUrgent(c.priority) && !isResolved(c.status));
+    case 'Completed': return cases.filter(c => isResolved(c.status));
     case 'Resolved': return cases.filter(c => isResolved(c.status));
     case 'Urgent': return cases.filter(c => isUrgent(c.priority) && !isResolved(c.status));
     case 'Approval': return cases.filter(needsApproval);

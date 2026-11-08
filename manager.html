@@ -269,6 +269,44 @@ async function openCase(id) {
   document.getElementById('overlay').classList.add('open');
 }
 
+const MANAGER_STATUSES = [
+  'New', 'Assigned', 'Scheduled', 'In Progress', 'Waiting on Parts',
+  'Waiting on Tenant Access', 'On Hold', 'Completed', 'Closed',
+];
+
+const TENANT_UPDATE_PRESETS = [
+  'We received your request and are reviewing it.',
+  'A technician has been assigned to your request.',
+  "Your service visit has been scheduled. We'll confirm the time shortly.",
+  'The technician is on the way.',
+  "Parts have been ordered. We'll update you when they arrive.",
+  'We need access to your unit. Please contact us to arrange a time.',
+  'The repair is complete. Please let us know if anything else is needed.',
+];
+
+const INTERNAL_NOTE_PRESETS = [
+  'Called tenant, no answer, left voicemail.',
+  'Vendor contacted, awaiting confirmation.',
+  'Quote requested from vendor.',
+  'Quote approved.',
+  'Follow-up needed.',
+  'Duplicate of another case.',
+];
+
+
+// Presets fill the existing editable fields. Nothing is saved until Save is pressed.
+function presetOptions(items) {
+  return '<option value="">Choose a common entry…</option>' + items.map(text =>
+    `<option value="${esc(text)}">${esc(text)}</option>`).join('');
+}
+function applyPreset(select, targetId) {
+  if (!select.value) return;
+  const field = document.getElementById(targetId);
+  field.value = select.value;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  select.value = '';
+}
+
 function renderPanel(c) {
   const vendOpts = _vendors.map(v => `<option value="${v.id}" ${c.vendorId === v.id ? 'selected' : ''}>${esc(v.company_name || v.name || '')}</option>`).join('');
   const timeline = (c.timeline || []).map(t =>
@@ -284,12 +322,16 @@ function renderPanel(c) {
     <div class="section-sep">Status &amp; Notes</div>
     <div class="field-row"><label class="field-label" for="p-status">Status</label>
       <select class="field-input" id="p-status">
-        ${['New','Assigned','Scheduled','In Progress','Completed','Closed'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
+        ${(MANAGER_STATUSES.includes(c.status) ? MANAGER_STATUSES : [c.status, ...MANAGER_STATUSES]).map(s=>`<option value="${esc(s)}"${c.status===s?' selected':''}>${esc(s)}</option>`).join('')}
       </select></div>
     <div class="field-row"><label class="field-label" for="p-update">Tenant Update (visible to tenant)</label>
+      <label class="field-label" for="p-update-preset">Common tenant update</label>
+      <select class="field-input" id="p-update-preset" onchange="applyPreset(this, 'p-update')">${presetOptions(TENANT_UPDATE_PRESETS)}</select>
       <textarea class="field-input" id="p-update" rows="3" maxlength="1000">${esc(c.tenantUpdate||'')}</textarea>
       <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px;cursor:pointer"><input type="checkbox" id="p-notify"> Also send this update to the resident by their chosen text or email</label></div>
     <div class="field-row"><label class="field-label" for="p-notes">Internal Notes (managers only)</label>
+      <label class="field-label" for="p-notes-preset">Common internal note</label>
+      <select class="field-input" id="p-notes-preset" onchange="applyPreset(this, 'p-notes')">${presetOptions(INTERNAL_NOTE_PRESETS)}</select>
       <textarea class="field-input" id="p-notes" rows="3" maxlength="4000">${esc(c.internalNotes||'')}</textarea></div>
     <button class="btn-primary" onclick="saveCase('${c.id}')">Save</button>
     <span id="case-save-msg" style="font-size:13px;color:var(--gold);margin-left:12px"></span>

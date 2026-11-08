@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ApiError, sendTestPush, type PushPrefs } from '../../lib/api';
-import { registerForPush, type PushState } from '../../lib/push';
-import { registerForWebPush, webPushStatus } from '../../lib/webpush';
+import { ApiError, sendTestPush, type PushPrefs } from '../../../lib/api';
+import { registerForPush, type PushState } from '../../../lib/push';
+import { registerForWebPush, webPushStatus } from '../../../lib/webpush';
+import { Button, Card, Centered, Label } from '../../../components/ui';
+import { colors, fonts, radius } from '../../../lib/theme';
+import { showMessage } from '../../../lib/dialog';
 
 const isWeb = Platform.OS === 'web';
 type ScreenState = PushState | { state: 'ASK'; message: string };
@@ -11,9 +14,6 @@ type ScreenState = PushState | { state: 'ASK'; message: string };
 // Phones register straight away; browsers must wait for a tap before asking permission.
 const initialState = (): Promise<ScreenState> => (isWeb ? webPushStatus() : registerForPush());
 const register = (prefs?: PushPrefs): Promise<PushState> => (isWeb ? registerForWebPush(prefs) : registerForPush(prefs));
-import { Button, Card, Centered, Label } from '../../components/ui';
-import { colors, fonts, radius } from '../../lib/theme';
-import { showMessage } from '../../lib/dialog';
 
 const ITEMS: { key: keyof PushPrefs; title: string; detail: string }[] = [
   {
@@ -75,7 +75,7 @@ export default function Alerts() {
         <Ionicons name="notifications" size={40} color={colors.gold} />
         <Text style={s.center}>{push.message}</Text>
         <Button label="Turn on alerts" icon="notifications" onPress={turnOn} busy={saving} />
-        <Text style={s.small}>Your browser will ask for permission. You'll still get staff text messages.</Text>
+        <Text style={s.small}>Your browser will ask for permission. You&apos;ll still get staff text messages.</Text>
       </Centered>
     );
   }
@@ -87,7 +87,7 @@ export default function Alerts() {
         <Text style={s.center}>{push.message}</Text>
         {push.state === 'DENIED' && !isWeb ? <Button label="Open Settings" onPress={() => Linking.openSettings()} /> : null}
         {push.state === 'FAILED' ? <Button label="Try again" onPress={() => { setPush(null); (isWeb ? register() : registerForPush()).then(setPush); }} /> : null}
-        <Text style={s.small}>You'll still get staff text messages.</Text>
+        <Text style={s.small}>You&apos;ll still get staff text messages.</Text>
       </Centered>
     );
   }
@@ -96,7 +96,7 @@ export default function Alerts() {
     <ScrollView contentContainerStyle={s.wrap}>
       {!push.serverEnabled ? (
         <View style={s.notice}>
-          <Text style={s.noticeText}>This phone is registered, but PMA isn't sending push notifications yet. You'll still get staff texts.</Text>
+          <Text style={s.noticeText}>This phone is registered, but PMA isn&apos;t sending push notifications yet. You&apos;ll still get staff texts.</Text>
         </View>
       ) : null}
       <Label>ALERT ME ABOUT</Label>
@@ -119,7 +119,7 @@ export default function Alerts() {
       </Card>
       <Button label="Send a test notification" icon="notifications" tone="ghost" onPress={test} busy={testing} />
       <Text style={s.small}>
-        Alerts go to this device while you're signed in. Signing out stops them. Staff text messages continue as before.
+        Alerts go to this device while you&apos;re signed in. Signing out stops them. Staff text messages continue as before.
       </Text>
     </ScrollView>
   );
