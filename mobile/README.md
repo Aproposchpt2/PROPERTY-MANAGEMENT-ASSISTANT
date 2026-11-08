@@ -10,7 +10,7 @@ What it does:
 
 - **Residents:** request maintenance (same result as calling the Customer Care Center: case number,
   emergency escalation, staff alerts, text or email confirmation, status link) and follow their cases.
-- **Managers:** dashboard, cases, provider assignment, cost approvals, updates sent to residents, and
+- **Management team:** dashboard, cases, provider assignment, cost approvals, updates sent to residents, and
   alerts (web push in the browser, native push in phone builds).
 
 Blueprint: [`docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md`](../docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md) ·
