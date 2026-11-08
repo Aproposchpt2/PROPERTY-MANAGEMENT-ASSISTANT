@@ -41,7 +41,7 @@ database change marked **applied live** in section 4.
 | `7d61e3b` | Fix two public Supabase functions (migration not yet applied) |
 | `0e7fe14` | Add this change record |
 | `828148d` | Add single mobile launch guide |
-| *(next)* | Deliver the PMA app as a web app at /app with web push; pricing $999/mo (section 9) |
+| `d474fc3` | Deliver the PMA app as a web app at /app with web push; pricing $999/mo (section 9) |
 
 ---
 
