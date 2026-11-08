@@ -20,7 +20,7 @@
         "EXPO_PUBLIC_PMA_PHONE": "+17252010584",
         "EXPO_PUBLIC_ENABLE_MANAGER": "true",
         "EXPO_PUBLIC_APP_MODE": "staff",
-        "EXPO_PUBLIC_BUSINESS_NAME": ""
+        "EXPO_PUBLIC_BUSINESS_NAME": "Desert Ridge"
       }
     },
     "production": {
