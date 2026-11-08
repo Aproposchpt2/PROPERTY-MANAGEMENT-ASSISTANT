@@ -50,13 +50,44 @@ export async function getCase(id: string): Promise<CaseDetail> {
   return request<CaseDetail>(`/api/manager/cases/${encodeURIComponent(id)}`, {}, true);
 }
 
-export type CasePatch = { status?: string; tenant_update?: string; internal_notes?: string };
+export type CasePatch = { status?: string; tenant_update?: string; internal_notes?: string; notify_resident?: boolean };
+export type NotificationOutcome = { sent: boolean; state: string; method: 'sms' | 'email' | null };
 export async function updateCase(id: string, patch: CasePatch) {
-  return request<{ success: boolean; status: string; priority: string }>(
+  return request<{ success: boolean; status: string; priority: string; notification?: NotificationOutcome }>(
     `/api/manager/cases/${encodeURIComponent(id)}`,
     { method: 'PATCH', body: JSON.stringify(patch) },
     true,
   );
+}
+
+export type Vendor = { id: string; name: string | null; trade: string | null; phone: string | null; status: string };
+export async function listVendors(): Promise<Vendor[]> {
+  const d = await request<{ success: boolean; vendors: Vendor[] }>('/api/manager/vendors', {}, true);
+  return d?.vendors ?? [];
+}
+
+export type Assignment = { vendorId: string; scheduledStart: string | null; scheduledEnd: string | null; workOrderRef: string | null };
+export async function assignVendor(id: string, a: Assignment) {
+  const d = await request<{ success: boolean; state?: string }>(
+    `/api/manager/cases/${encodeURIComponent(id)}/assign`,
+    { method: 'POST', body: JSON.stringify(a) },
+    true,
+  );
+  if (!d?.success) {
+    throw new ApiError(400, d?.state === 'VENDOR_NOT_FOUND' ? 'That provider is no longer available.' : 'The provider was not assigned. Try again.');
+  }
+  return d;
+}
+
+// Answer a pending not-to-exceed (cost) approval.
+export async function answerApproval(id: string, response: 'APPROVED' | 'DECLINED') {
+  const d = await request<{ success: boolean }>(
+    `/api/manager/cases/${encodeURIComponent(id)}/approve`,
+    { method: 'POST', body: JSON.stringify({ response }) },
+    true,
+  );
+  if (!d?.success) throw new ApiError(400, 'The approval was not recorded. Try again.');
+  return d;
 }
 
 // Resident portal API (the status-link token is the credential)

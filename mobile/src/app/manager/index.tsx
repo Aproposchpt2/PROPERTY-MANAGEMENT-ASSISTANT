@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ApiError, listCases } from '../../lib/api';
-import { QUEUE_FILTERS, caseCounts, filterCases, formatWhen, isUrgent, type CaseSummary, type QueueFilter } from '../../lib/cases';
+import { QUEUE_FILTERS, caseCounts, filterCases, formatMoney, formatWhen, isUrgent, needsApproval, type CaseSummary, type QueueFilter } from '../../lib/cases';
 import { supabase } from '../../lib/supabase';
 import { useSession } from '../../lib/session';
 import { Button, Centered, PriorityBadge, StatusBadge } from '../../components/ui';
@@ -33,6 +33,7 @@ export default function ManagerDashboard() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const counts = useMemo(() => caseCounts(cases), [cases]);
+  const approvals = useMemo(() => cases.filter(needsApproval).length, [cases]);
   const visible = useMemo(() => filterCases(cases, filter), [cases, filter]);
   const signOut = () => supabase.auth.signOut();
 
@@ -80,6 +81,15 @@ export default function ManagerDashboard() {
               <Metric label="Urgent" value={counts.urgent} icon="warning" color={colors.ember} onPress={() => setFilter('Urgent')} />
               <Metric label="Resolved" value={counts.resolved} icon="checkmark-circle" color={colors.green} onPress={() => setFilter('Resolved')} />
             </View>
+            {approvals > 0 ? (
+              <Pressable style={s.approvals} onPress={() => setFilter('Approval')} accessibilityRole="button">
+                <Ionicons name="cash" size={20} color="#1E3A8A" />
+                <Text style={s.approvalsText}>
+                  {approvals} cost approval{approvals === 1 ? '' : 's'} waiting for you
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#1E3A8A" />
+              </Pressable>
+            ) : null}
             <Text style={s.section}>Incident Queue</Text>
             <View style={s.filters}>
               {QUEUE_FILTERS.map(f => (
@@ -128,6 +138,9 @@ function CaseRow({ item }: { item: CaseSummary }) {
       </View>
       <View style={s.cardBottom}>
         <StatusBadge status={item.status} />
+        {needsApproval(item) ? (
+          <View style={s.approvalBadge}><Text style={s.approvalBadgeText}>APPROVAL {formatMoney(item.nteAmount)}</Text></View>
+        ) : null}
         {item.vendorName ? <Text style={s.vendor} numberOfLines={1}>{item.vendorName}</Text> : null}
         <Ionicons name="chevron-forward" size={20} color={colors.muted} />
       </View>
@@ -171,6 +184,10 @@ const s = StyleSheet.create({
   meta: { fontSize: 12, color: colors.muted, marginTop: 4 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
   vendor: { flex: 1, fontSize: 12, color: colors.muted, textAlign: 'right' },
+  approvals: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#93C5FD', borderRadius: 12, padding: 14, marginTop: 12 },
+  approvalsText: { flex: 1, fontWeight: '800', color: '#1E3A8A' },
+  approvalBadge: { backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  approvalBadgeText: { fontSize: 10, fontWeight: '900', color: '#1E3A8A' },
   empty: { alignItems: 'center', padding: 36, gap: 8 },
   emptyText: { color: colors.muted },
 });

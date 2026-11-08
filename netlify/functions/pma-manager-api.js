@@ -2,6 +2,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifyManager } = require('./lib/pma-auth');
+const { notifyResident, addApprovalFields } = require('./lib/pma-resident-notify');
 
 const CORS = {
   'content-type': 'application/json',
@@ -13,10 +14,13 @@ function json(statusCode, body) {
   return { statusCode, headers: CORS, body: JSON.stringify(body) };
 }
 
-function makeRpc(env) {
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+function makeDb(env) {
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function makeRpc(env, db) {
   return async (name, args) => {
     const { data, error } = await db.rpc(name, {
       t: env.PMA_TENANT_ID,
@@ -47,27 +51,39 @@ exports.handler = async function handler(event) {
   if (event.body) {
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
   }
-  const rpc = makeRpc(env);
+  const db = makeDb(env);
+  const rpc = makeRpc(env, db);
+  const scope = { db, tenantId: env.PMA_TENANT_ID, propertyId: env.PMA_PROPERTY_ID };
   try {
     // GET /api/manager/cases
     if (action === 'cases' && !id && event.httpMethod === 'GET') {
       const params = event.queryStringParameters || {};
       const status_filter = params.status ? params.status.split(',') : null;
       const data = await rpc('pma_mgr_case_list_v1', { status_filter });
+      await addApprovalFields({ ...scope, cases: data && data.cases });
       return json(200, data);
     }
     // GET /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'GET') {
       const data = await rpc('pma_mgr_case_get_v1', { request_id: id });
       if (data && data.state === 'NOT_FOUND') return json(404, data);
+      if (data && data.success) await addApprovalFields({ ...scope, cases: [data] });
       return json(200, data);
     }
     // PATCH /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'PATCH') {
+      // notify_resident is ours, not a case field: strip it before the RPC (which rejects unknown keys).
+      const { notify_resident: notify, ...patch } = body;
+      if (notify !== undefined && typeof notify !== 'boolean') return json(400, { error: 'notify_resident must be true or false' });
       const data = await rpc('pma_mgr_case_update_v1', {
-        request_id: id, actor_user_id: authUserId, patch: body,
+        request_id: id, actor_user_id: authUserId, patch,
       });
       if (data && data.state === 'NOT_FOUND') return json(404, data);
+      if (data && data.success && notify === true && typeof patch.tenant_update === 'string' && patch.tenant_update.trim()) {
+        data.notification = await notifyResident({
+          ...scope, env, requestId: id, update: patch.tenant_update, actorUserId: authUserId,
+        });
+      }
       return json(200, data);
     }
     // POST /api/manager/cases/:id/assign

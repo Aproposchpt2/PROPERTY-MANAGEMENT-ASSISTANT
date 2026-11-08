@@ -287,7 +287,8 @@ function renderPanel(c) {
         ${['New','Assigned','Scheduled','In Progress','Completed','Closed'].map(s=>`<option${c.status===s?' selected':''}>${s}</option>`).join('')}
       </select></div>
     <div class="field-row"><label class="field-label" for="p-update">Tenant Update (visible to tenant)</label>
-      <textarea class="field-input" id="p-update" rows="3" maxlength="1000">${esc(c.tenantUpdate||'')}</textarea></div>
+      <textarea class="field-input" id="p-update" rows="3" maxlength="1000">${esc(c.tenantUpdate||'')}</textarea>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px;cursor:pointer"><input type="checkbox" id="p-notify"> Also send this update to the resident by their chosen text or email</label></div>
     <div class="field-row"><label class="field-label" for="p-notes">Internal Notes (managers only)</label>
       <textarea class="field-input" id="p-notes" rows="3" maxlength="4000">${esc(c.internalNotes||'')}</textarea></div>
     <button class="btn-primary" onclick="saveCase('${c.id}')">Save</button>
@@ -315,10 +316,14 @@ async function saveCase(id) {
     tenant_update: document.getElementById('p-update').value,
     internal_notes: document.getElementById('p-notes').value,
   };
+  if (document.getElementById('p-notify').checked) patch.notify_resident = true;
   const d = await apiFetch('/api/manager/cases/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
-  msg.textContent = d.success ? 'Saved.' : ('Error: ' + (d.error || 'unknown'));
+  const NOTE = { SENT: ' Resident notified.', NO_PREFERENCE: ' Resident has no text or email preference; not sent.', DISABLED: ' Resident messages are turned off; not sent.', OPTED_OUT: ' Resident opted out of texts; not sent.', NO_UPDATE: ' No update text to send.' };
+  const n = d.notification ? (NOTE[d.notification.state] || ' Resident message could not be sent.') : '';
+  if (d.success) document.getElementById('p-notify').checked = false;
+  msg.textContent = d.success ? 'Saved.' + n : ('Error: ' + (d.error || 'unknown'));
   if (d.success) loadCases();
-  setTimeout(() => { msg.textContent = ''; }, 3000);
+  setTimeout(() => { msg.textContent = ''; }, d.notification ? 6000 : 3000);
 }
 
 // datetime-local has no zone; interpret in the manager's browser time and send ISO with offset.

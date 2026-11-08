@@ -174,4 +174,39 @@ async function sendVerificationCode({ to, code, env }) {
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms, sendVerificationCode };
+// A manager's update, texted to the resident who asked for updates by text.
+// Throws on failure (21610 = resident opted out) so the caller can record the outcome.
+async function sendResidentUpdate({ to, caseNumber, update, status, language = 'en', env }) {
+  if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) {
+    throw Object.assign(new Error('SMS_NOT_CONFIGURED'), { code: 'SMS_NOT_CONFIGURED' });
+  }
+  const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  const body = language === 'es'
+    ? `Desert Ridge Customer Care: actualización del caso #${caseNumber} (${status}): ${update} Responda STOP para cancelar.`
+    : `Desert Ridge Customer Care: update on case #${caseNumber} (${status}): ${update} Reply STOP to opt out.`;
+  const params = { to, body };
+  if (env.PMA_SMS_MESSAGING_SERVICE_SID) {
+    params.messagingServiceSid = env.PMA_SMS_MESSAGING_SERVICE_SID;
+    if (env.PMA_SMS_FROM_NUMBER) params.from = env.PMA_SMS_FROM_NUMBER;
+  } else {
+    params.from = env.PMA_SMS_FROM_NUMBER;
+  }
+  const last4 = String(to).slice(-4);
+  try {
+    const msg = await Promise.race([
+      client.messages.create(params),
+      new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('SMS_TIMEOUT'), { code: 'SMS_TIMEOUT' })), 8000)),
+    ]);
+    console.log(JSON.stringify({ event: 'pma_sms_resident_update_sent', to_last4: last4, sid: msg.sid }));
+    return { sid: msg.sid };
+  } catch (err) {
+    if (err.code === 21610 || err.status === 21610) {
+      console.error(JSON.stringify({ event: 'pma_sms_opted_out', to_last4: last4 }));
+      throw Object.assign(new Error('OPTED_OUT'), { code: 21610, twilioCode: 21610 });
+    }
+    console.error(JSON.stringify({ event: 'pma_sms_resident_update_failed', to_last4: last4, code: err.code || err.message }));
+    throw err;
+  }
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms, sendVerificationCode, sendResidentUpdate };

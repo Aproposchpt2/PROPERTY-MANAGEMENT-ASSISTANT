@@ -157,3 +157,27 @@ test('500 on RPC error', async () => {
   assert.equal(res.statusCode, 500);
   rpcOverride = null;
 });
+
+test('PATCH strips notify_resident before the RPC and rejects non-boolean values', async () => {
+  authOverride = null;
+  let seen = null;
+  rpcOverride = async (name, args) => { seen = args; return { data: { success: true, status: 'Scheduled', priority: 'normal' }, error: null }; };
+  const bad = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { tenant_update: 'x', notify_resident: 'yes' }));
+  assert.equal(bad.statusCode, 400);
+  assert.equal(seen, null);
+  const res = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { status: 'Scheduled', notify_resident: false }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(seen.patch, { status: 'Scheduled' });
+  assert.equal(JSON.parse(res.body).notification, undefined);
+  rpcOverride = null;
+});
+
+test('PATCH with notify_resident reports the notification outcome', async () => {
+  authOverride = null;
+  rpcOverride = async () => ({ data: { success: true, status: 'Scheduled', priority: 'normal' }, error: null });
+  // The stubbed client has no table access, so the lookup fails and is reported, not thrown.
+  const res = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { tenant_update: 'Booked for 9am', notify_resident: true }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body).notification, { sent: false, state: 'FAILED', method: null });
+  rpcOverride = null;
+});

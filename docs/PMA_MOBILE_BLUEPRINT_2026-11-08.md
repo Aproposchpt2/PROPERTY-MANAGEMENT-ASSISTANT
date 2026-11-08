@@ -1,6 +1,6 @@
 # PMA Mobile App — Blueprint
 **Stellar Intelligent Software Developers · Property Management Assistant**
-*Snapshot: 2026-11-08 · Status: Phase 1 built, not yet device-tested or released*
+*Snapshot: 2026-11-08 · Status: Phase 1 and phase 2 built, not yet device-tested or released*
 
 Source handoff: [`handoff/PROPERTY_MANAGEMENT_ASSISTANT_COMPLETE_RUFLO_HANDOFF.docx`](handoff/PROPERTY_MANAGEMENT_ASSISTANT_COMPLETE_RUFLO_HANDOFF.docx)
 Code: [`/mobile`](../mobile) · Run instructions: [`mobile/README.md`](../mobile/README.md)
@@ -18,8 +18,9 @@ request in the app and gets the same result as calling: same case record, case n
 emergency escalation, staff alerts, text or email confirmation and status link. The resident
 can then follow the request in the app.
 
-Manager screens were also built from the handoff. They are **phase 2**: in the code, hidden
-from the app until `EXPO_PUBLIC_ENABLE_MANAGER=true`.
+**Phase 2 is the manager app** (section 2A): managers work cases from their phone, assign
+providers, answer cost approvals and send updates to residents. It is built and switched on
+per build with `EXPO_PUBLIC_ENABLE_MANAGER=true`, so the phase 1 resident release can ship first.
 
 ---
 
@@ -77,6 +78,34 @@ The shared steps live in `netlify/functions/lib/pma-intake-flow.js`, used by bot
 
 ---
 
+## 2A. Phase 2: Manager App
+
+### What a manager does
+
+| Screen | Capability |
+|---|---|
+| Sign in | Emailed 6-digit code (same accounts as the web dashboard). Non-managers see an access message only |
+| Dashboard | Active / New / Urgent / Resolved tiles; "N cost approvals waiting" banner; queue filters All, Urgent, Approval, New, Assigned, Scheduled, In Progress, Resolved; emergencies marked red, approvals marked blue |
+| Case | Details and masked resident contact; **cost approval** card (Approve / Decline, with confirmation); **service provider** card; status; update for the resident with **"Also send this update to the resident"**; staff-only notes; activity timeline |
+| Assign provider | Choose an active provider for the property; optional visit day (next 7 days) and 2-hour window (8am–6pm); optional work order number. A New case moves to Assigned or Scheduled; an earlier provider is replaced |
+
+Adding or editing providers and pre-approval limits stays on the web dashboard.
+
+### Server changes (benefit the web dashboard too)
+
+| Change | Where | Detail |
+|---|---|---|
+| **Send update to resident** | `PATCH /api/manager/cases/:id` with `notify_resident: true`; `lib/pma-resident-notify.js` | Sends the saved update by the resident's chosen method (text or email, English or Spanish) and records `resident_update_sent` in the timeline. Returns `notification: { sent, state, method }`; states `SENT`, `OPTED_OUT`, `DISABLED`, `NO_PREFERENCE`, `FAILED`. Never fails the save itself |
+| Web dashboard checkbox | `manager.html` | "Also send this update to the resident"; the save message reports the outcome |
+| **Cost approval fields** | `GET /api/manager/cases` and `/cases/:id` | Adds `nteAmount` and `approvalState`. The live case RPCs don't return them, so the web dashboard's approval badges never showed; they now do |
+| Senders | `lib/pma-sms.js`, `lib/pma-email.js` | New `sendResidentUpdate` (text honours STOP opt-outs; email HTML-escapes the update) |
+
+Approve/Decline uses the existing `POST /cases/:id/approve` (`pma_mgr_approve_case_v1`, live in
+Supabase but not in this repo's migrations; see Known Gaps). Assignment uses the existing
+`POST /cases/:id/assign`. No database changes.
+
+---
+
 ## 3. App Architecture
 
 | Layer | Implementation |
@@ -93,7 +122,9 @@ The shared steps live in `netlify/functions/lib/pma-intake-flow.js`, used by bot
 | `src/app/request.tsx` | Request maintenance (3 steps + confirmation) | 1 |
 | `src/app/resident.tsx` | My requests: recent cases, paste a status link, call the line | 1 |
 | `src/app/status.tsx` | Case status: progress, team update, visit, activity; refreshes every 60 s | 1 |
-| `src/app/manager/*` | Manager sign-in, dashboard, case workspace | 2 (hidden) |
+| `src/app/manager/login.tsx`, `index.tsx` | Manager sign-in, dashboard | 2 |
+| `src/app/manager/[id].tsx` | Case: approval, provider, status, resident update, notes, timeline | 2 |
+| `src/app/manager/assign.tsx` | Assign provider and visit window | 2 |
 
 Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/test/`).
 
@@ -121,6 +152,10 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 - The request flow was run end to end on Expo web at phone size against a mocked server:
   form checks, code step, the exact body sent to the server, the urgent confirmation and the
   status hand-off. The manager button is hidden and `/manager` returns to the welcome screen.
+- **Phase 2:** root suite **170/170** (8 new tests for resident notification, approval fields and the
+  PATCH flag); mobile **15/15**. Manager screens run on Expo web against a mocked API: approval banner
+  and filter, approval card, assign screen sending provider + 2-hour window + work order, return to the
+  case without losing a half-typed update, and save sending `notify_resident: true`.
 - **Not yet done:** real device, real texts, a real case in Supabase.
 
 ---
@@ -146,21 +181,28 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 6. **Global rate limit (before wide release):** move the per-number and per-code limits into
    Supabase so they hold across server instances.
 
-### Phase 2 — Manager app and updates to residents
+### Phase 2 — Manager app (built; launch steps)
 
-7. Turn on the manager screens (`EXPO_PUBLIC_ENABLE_MANAGER=true`); confirm the Supabase sign-in email
-   includes the 6-digit code (`{{ .Token }}`).
-8. **Text or email residents when a manager posts an update.** Today a saved update only appears on the
-   status page (web dashboard and app alike). Reuse `pma-intake-flow.js` senders and the case's preference.
-9. Vendor assignment and cost approvals in the app (APIs exist); manager push notifications.
+7. **Sign-in email:** confirm the Supabase "Magic Link" template includes `{{ .Token }}` so managers get a code.
+8. **Device test with real accounts:** a manager (sees cases, saves, assigns, approves), a signed-in
+   non-manager (access message only), and "send to resident" by text and by email on a test case.
+   Check a declined approval and an assignment with and without a visit time.
+9. **Build:** `EXPO_PUBLIC_ENABLE_MANAGER=true` for the release that includes managers.
+10. **Manager push notifications** (new case, emergency, approval waiting). Needs `eas init` (push needs
+    an EAS project id), `npx expo install expo-notifications`, a `pma_push_tokens` table (RLS on,
+    service-role only) applied to a Supabase branch first, a `POST /api/manager/push-token` route, and
+    sends alongside the existing staff texts. Until then managers keep getting staff texts.
+11. **Bring the repo in line with the live database:** add a migration capturing
+    `pma_mgr_approve_case_v1` as deployed, and remove or rename the unused 4-argument case functions
+    in `20261029110000_pma_approval_rpcs.sql`, which differ from what is live.
 
 ### Phase 3 — Richer requests
 
-10. Photos (private Supabase Storage bucket, signed upload URLs from the API).
-11. Resident push notifications for status changes.
-12. Multiple properties: the API is scoped to one `PMA_PROPERTY_ID`; add property selection aligned with
+12. Photos (private Supabase Storage bucket, signed upload URLs from the API).
+13. Resident push notifications for status changes.
+14. Multiple properties: the API is scoped to one `PMA_PROPERTY_ID`; add property selection aligned with
     `PMA_MULTI_SUBSCRIBER_BILLING.md`.
-13. Offline retry, screen-reader and large-text QA, Spanish screens.
+15. Offline retry, screen-reader and large-text QA, Spanish screens.
 
 ---
 
@@ -173,7 +215,7 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | Netlify | `PMA_SMS_FROM_NUMBER`, `PMA_SMS_MESSAGING_SERVICE_SID`, Twilio keys | Existing; codes are sent from PMA's line |
 | App | `EXPO_PUBLIC_PMA_API_BASE` | `https://pma.stellaruc.com` |
 | App | `EXPO_PUBLIC_PMA_PHONE` | Property line shown to residents |
-| App | `EXPO_PUBLIC_ENABLE_MANAGER` | `false` for phase 1 |
+| App | `EXPO_PUBLIC_ENABLE_MANAGER` | `false` for the phase 1 resident release; `true` once managers are included |
 
 ---
 
@@ -184,5 +226,8 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 | App requests labelled as voice | Step 2 above |
 | Rate limits per instance | Step 6 above |
 | Single property | Inherited from the voice path (`PMA_TENANT_ID`, `PMA_PROPERTY_ID`) |
+| Repo vs live approval functions | `pma_mgr_approve_case_v1` exists only in the live database; the repo's 4-argument case functions are not what is live (step 11) |
+| Manager push notifications | Step 10; staff texts continue meanwhile |
+| Approve/Decline on Expo web | Confirmation pop-ups don't show in a browser build; managers on a computer use `manager.html` |
 | Expo web against production | APIs send no CORS headers; web is for layout checks only |
 | `npx expo install` online check | Blocked in the cloud build environment; run `npx expo install --check` on a developer machine |

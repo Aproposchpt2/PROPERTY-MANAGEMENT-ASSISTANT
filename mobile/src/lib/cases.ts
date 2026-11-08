@@ -24,6 +24,8 @@ export type CaseSummary = {
   scheduledStart?: string | null;
   scheduledEnd?: string | null;
   tenantUpdate?: string | null;
+  nteAmount?: number | null;
+  approvalState?: string | null;
 };
 
 export type TimelineEntry = {
@@ -45,6 +47,7 @@ export type CaseDetail = CaseSummary & {
   completedAt?: string | null;
   resolutionNote?: string | null;
   workOrderRef?: string | null;
+  vendorId?: string | null;
   timeline: TimelineEntry[];
 };
 
@@ -72,6 +75,11 @@ export function isUrgent(priority: string | null | undefined): boolean {
   return !!priority && URGENT_PRIORITIES.includes(priority.toLowerCase());
 }
 
+// A provider's quote is over the pre-authorized limit and waits for a manager.
+export function needsApproval(c: Pick<CaseSummary, 'approvalState'>): boolean {
+  return c.approvalState === 'PENDING';
+}
+
 export function caseCounts(cases: readonly CaseSummary[]) {
   let active = 0, fresh = 0, urgent = 0, resolved = 0;
   for (const c of cases) {
@@ -83,7 +91,7 @@ export function caseCounts(cases: readonly CaseSummary[]) {
   return { active, new: fresh, urgent, resolved };
 }
 
-export const QUEUE_FILTERS = ['All', 'Urgent', 'New', 'Assigned', 'Scheduled', 'In Progress', 'Resolved'] as const;
+export const QUEUE_FILTERS = ['All', 'Urgent', 'Approval', 'New', 'Assigned', 'Scheduled', 'In Progress', 'Resolved'] as const;
 export type QueueFilter = (typeof QUEUE_FILTERS)[number];
 
 export function filterCases(cases: readonly CaseSummary[], filter: QueueFilter): CaseSummary[] {
@@ -91,6 +99,7 @@ export function filterCases(cases: readonly CaseSummary[], filter: QueueFilter):
     case 'All': return [...cases];
     case 'Resolved': return cases.filter(c => isResolved(c.status));
     case 'Urgent': return cases.filter(c => isUrgent(c.priority) && !isResolved(c.status));
+    case 'Approval': return cases.filter(needsApproval);
     default: return cases.filter(c => c.status === filter);
   }
 }
@@ -122,6 +131,7 @@ const EVENT_LABELS: Record<string, string> = {
   nte_approval_response: 'Cost approval answered',
   nte_auto_approved: 'Work pre-approved',
   mgr_approval_response: 'Manager approval answered',
+  resident_update_sent: 'Update sent to resident',
 };
 export function eventLabel(eventType: string): string {
   if (EVENT_LABELS[eventType]) return EVENT_LABELS[eventType];
@@ -138,4 +148,46 @@ export function formatWhen(iso: string | null | undefined, timeZone?: string): s
   } catch {
     return d.toLocaleString();
   }
+}
+
+// Visit scheduling for the assign screen: the next 7 days and 2-hour windows from 8am to 6pm,
+// in the manager's local time (as the web dashboard does).
+export const VISIT_WINDOWS = [8, 10, 12, 14, 16] as const;
+
+export function nextDays(now: Date, count = 7): Date[] {
+  return Array.from({ length: count }, (_, i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + i));
+}
+
+export function visitWindow(day: Date, startHour: number, hours = 2): { start: string; end: string } {
+  const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), startHour);
+  const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), startHour + hours);
+  return { start: s.toISOString(), end: e.toISOString() };
+}
+
+// A window that has already ended cannot be booked.
+export function windowAvailable(day: Date, startHour: number, now: Date, hours = 2): boolean {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), startHour + hours).getTime() > now.getTime();
+}
+
+export function hourLabel(h: number): string {
+  return `${h % 12 === 0 ? 12 : h % 12}${h >= 12 ? 'pm' : 'am'}`;
+}
+
+// What the manager is told after saving, including whether the resident was messaged.
+export function savedMessage(updatedResidentText: boolean, notification?: { state: string; method?: string | null }): string {
+  if (!updatedResidentText) return 'Case updated.';
+  const page = 'The resident sees your update on their status page.';
+  if (!notification) return `Case updated. ${page}`;
+  const how = notification.method === 'email' ? 'email' : 'text';
+  switch (notification.state) {
+    case 'SENT': return `Case updated. The resident was also sent your update by ${how}.`;
+    case 'OPTED_OUT': return `Case updated. ${page} They have opted out of texts, so no text was sent.`;
+    case 'DISABLED': return `Case updated. ${page} Resident messages are turned off, so nothing was sent.`;
+    case 'NO_PREFERENCE': return `Case updated. ${page} They didn't choose text or email, so nothing was sent.`;
+    default: return `Case updated. ${page} The ${how} to the resident could not be sent.`;
+  }
+}
+
+export function formatMoney(n: number | null | undefined): string {
+  return n == null || !Number.isFinite(n) ? '' : `$${n.toFixed(2)}`;
 }
