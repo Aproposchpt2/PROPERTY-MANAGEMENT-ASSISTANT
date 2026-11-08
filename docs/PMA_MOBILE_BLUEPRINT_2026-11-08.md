@@ -3,7 +3,7 @@
 *Snapshot: 2026-11-08 · Status: Phase 1 and phase 2 built, not yet device-tested or released*
 
 Source handoff: [`handoff/PROPERTY_MANAGEMENT_ASSISTANT_COMPLETE_RUFLO_HANDOFF.docx`](handoff/PROPERTY_MANAGEMENT_ASSISTANT_COMPLETE_RUFLO_HANDOFF.docx)
-Code: [`/mobile`](../mobile) · Run instructions: [`mobile/README.md`](../mobile/README.md)
+Code: [`/mobile`](../mobile) · Run instructions: [`mobile/README.md`](../mobile/README.md) · Change record: [`PMA_CHANGE_RECORD_2026-11-08.md`](PMA_CHANGE_RECORD_2026-11-08.md)
 
 ---
 
