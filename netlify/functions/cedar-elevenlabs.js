@@ -274,7 +274,7 @@ async function handle(event, ctx = {}) {
     if (tool_name === 'record_contact_preference') {
       const args = {
         method: parameters.method,
-        destination: parameters.destination,
+        destination: ownLineToCaller(parameters.method, parameters.destination, dyn, caller_number_raw, env),
         consent: parameters.consent,
       };
       let result;
@@ -391,3 +391,15 @@ async function handle(event, ctx = {}) {
 
 exports.handle = handle;
 exports.handler = require('./lib/call-trace').traced(handle);
+
+// Ava sees both the caller's number and the number they dialed. If she passes one of our own
+// lines as the text destination, use the caller's own number instead (2026-11-07: a test call
+// recorded +17252010584, PMA's line, after the caller said "the number I'm calling from").
+function ownLineToCaller(method, destination, dyn, callerRaw, env) {
+  if (method !== 'sms' || !destination) return destination;
+  const digits = v => String(v || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  const own = [dyn.system__called_number, env.PMA_SMS_FROM_NUMBER, env.PMA_VENDOR_FROM].map(digits).filter(Boolean);
+  if (!own.includes(digits(destination))) return destination;
+  const caller = digits(dyn.system__caller_id || callerRaw);
+  return caller.length === 10 ? '+1' + caller : destination;
+}
