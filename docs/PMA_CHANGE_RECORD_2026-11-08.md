@@ -4,7 +4,8 @@
 
 This document records every change made on 2026-11-08: code, configuration and the live
 Supabase database. The design, screens and next steps are in
-[`PMA_MOBILE_BLUEPRINT_2026-11-08.md`](PMA_MOBILE_BLUEPRINT_2026-11-08.md).
+[`PMA_MOBILE_BLUEPRINT_2026-11-08.md`](PMA_MOBILE_BLUEPRINT_2026-11-08.md). The step-by-step launch
+checklist is [`PMA_MOBILE_LAUNCH_GUIDE.md`](PMA_MOBILE_LAUNCH_GUIDE.md).
 
 ---
 

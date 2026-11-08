@@ -8,6 +8,7 @@ escalation, staff alerts, text or email confirmation, status link), then follows
 **Phase 2** is the manager app, built and switched on per build with `EXPO_PUBLIC_ENABLE_MANAGER=true`.
 
 Full blueprint and next steps: [`docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md`](../docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md).
+Step-by-step launch checklist: [`docs/PMA_MOBILE_LAUNCH_GUIDE.md`](../docs/PMA_MOBILE_LAUNCH_GUIDE.md).
 
 ## How it connects
 
