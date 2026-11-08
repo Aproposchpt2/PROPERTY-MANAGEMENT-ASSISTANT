@@ -192,6 +192,45 @@ Shared logic with unit tests: `src/lib/cases.ts`, `src/lib/request.ts` (`mobile/
 
 ---
 
+## 3A. Brand and Type Style
+
+The app uses the same brand treatment as the website (`pma-site.css`). Tokens live in
+`mobile/src/lib/theme.ts`; fonts load in `mobile/src/app/_layout.tsx`.
+
+### Colour
+
+| Role | Value |
+|---|---|
+| Background | Black `#050505`; panels `#101010`, `#151515`, `#171717` |
+| Gold (buttons, outlines, icons, labels) | `#C8A84B`; light gold `#E4C878` for highlights and header icons |
+| Headings | Ivory `#F7F4EC` |
+| Body text | Warm white `#D3CEC1`; secondary `#9E988B` |
+| Lines | Gold at 28% (`rgba(200,168,75,0.28)`), 60% for emphasis |
+| Emergency only | Deep red `#B42318`, text `#F4B4AE` on `#2A1210` |
+
+### Type style
+
+| Use | Font | Treatment |
+|---|---|---|
+| Headlines, screen titles, case names, business name | **Cormorant Garamond** Medium (500) | Upright, never bold; ivory; large sizes (24–36) |
+| Header bar titles | Cormorant Garamond Medium | 22, ivory |
+| Small labels and eyebrows ("PROPERTY MANAGEMENT ASSISTANT", "EMAIL", status badges) | **Syncopate** Regular | Uppercase, 9–10, letter-spacing ~1.2, gold |
+| Body text, inputs, hints | **DM Sans** Regular (400) | 13–16, warm white |
+| Buttons, chip labels, emphasis | DM Sans SemiBold (600) | 15; black on gold, light gold on outline |
+| Counts and numbers that must be read at a glance | DM Sans SemiBold | Dashboard counts use DM Sans (Cormorant's old-style "1"/"0" read as "I"/"O"); serif case numbers use lining numerals |
+
+### Shape
+
+Square corners (2 px), thin gold borders, no shadows. Buttons: solid gold with black text (primary), gold outline
+with light-gold text (secondary), quiet outline (tertiary) — the site's `.btn.primary` / `.btn.outline`.
+
+### Applies to
+
+The staff in-house app, the resident web app at `/app`, the home-screen icon (gold star, "PMA", black), the web
+manifest and page background (black). The web Management Dashboard (`manager.html`) already uses the site styles.
+
+---
+
 ## 4. Reconciliation With the Handoff
 
 | Handoff item | Decision | Reason |

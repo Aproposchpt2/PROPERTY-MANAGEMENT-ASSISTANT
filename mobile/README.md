@@ -13,6 +13,8 @@ What it does:
 - **Management team:** dashboard, cases, provider assignment, cost approvals, updates sent to residents, and
   alerts (web push in the browser, native push in phone builds).
 
+Brand: black, gold and white; Cormorant Garamond / DM Sans / Syncopate, as on the website (blueprint section 3A, `src/lib/theme.ts`).
+
 Blueprint: [`docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md`](../docs/PMA_MOBILE_BLUEPRINT_2026-11-08.md) ·
 Launch checklist: [`docs/PMA_MOBILE_LAUNCH_GUIDE.md`](../docs/PMA_MOBILE_LAUNCH_GUIDE.md)
 

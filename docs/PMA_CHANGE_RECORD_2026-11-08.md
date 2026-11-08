@@ -293,4 +293,8 @@ Emergencies keep a deep red so they stand out.
 | `mobile/app.json`, `public/manifest.webmanifest`, `public/index.html` | Black theme colour and background; gold notification colour |
 | `mobile/package.json` | `expo-font`, `@expo-google-fonts/cormorant-garamond`, `dm-sans`, `syncopate` |
 
+Type style: Cormorant Garamond (500, upright, never bold) for headlines and titles; Syncopate uppercase
+spaced gold labels; DM Sans 400 for text and 600 for buttons and counts. Full colour and type table:
+blueprint section 3A.
+
 Verified: typecheck clean, mobile 16/16, web walkthrough unchanged, staff app and iPhone/Android bundles build.
