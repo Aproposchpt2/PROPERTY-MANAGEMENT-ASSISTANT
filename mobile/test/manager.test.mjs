@@ -60,3 +60,9 @@ test('notification tap opens only a well-formed case id', async () => {
   assert.equal(notificationCaseId(null), null);
   assert.equal(notificationCaseId('x'), null);
 });
+
+test('waiting statuses show as In Progress on the resident tracker', async () => {
+  const { statusStep } = await import('../src/lib/cases.ts');
+  for (const s of ['Waiting on Parts', 'Waiting on Tenant Access', 'On Hold']) assert.equal(statusStep(s), statusStep('In Progress'));
+  assert.equal(statusStep('In Progress'), 3);
+});

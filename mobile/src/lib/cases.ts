@@ -108,9 +108,14 @@ export function filterCases(cases: readonly CaseSummary[], filter: QueueFilter):
   }
 }
 
+// Staff "waiting" statuses (allowed by the database since 20261112090000). To the resident they
+// are still "In Progress".
+const IN_PROGRESS_ALIASES: readonly string[] = ['Waiting on Parts', 'Waiting on Tenant Access', 'On Hold'];
+
 // Position of a status in the lifecycle, for the resident progress tracker. -1 if unknown.
 export function statusStep(status: string): number {
-  return (CASE_STATUSES as readonly string[]).indexOf(status);
+  const s = IN_PROGRESS_ALIASES.includes(status) ? 'In Progress' : status;
+  return (CASE_STATUSES as readonly string[]).indexOf(s);
 }
 
 // Residents receive links like https://pma.stellaruc.com/status?t=TOKEN (or pma://status?t=TOKEN).

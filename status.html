@@ -72,7 +72,8 @@
 <script>
 const STEPS_EN = ['New','Scheduled','In Progress','Completed'];
 const STEPS_ES = ['Nuevo','Programado','En Progreso','Completado'];
-const STATUS_MAP = {'New':0,'Assigned':0,'Scheduled':1,'In Progress':2,'Completed':3,'Closed':3};
+// Staff "waiting" statuses are still in progress from the resident's point of view.
+const STATUS_MAP = {'New':0,'Assigned':0,'Scheduled':1,'In Progress':2,'Waiting on Parts':2,'Waiting on Tenant Access':2,'On Hold':2,'Completed':3,'Closed':3};
 const LABELS_EN = {vendor:'Service Provider',scheduled:'Scheduled',update:'Latest Update'};
 const LABELS_ES = {vendor:'Proveedor de Servicio',scheduled:'Programado',update:'Ultima Actualizacion'};
 let _data = null, _lang = 'en';
