@@ -110,7 +110,7 @@ exports.handler = async function handler(event) {
     // PATCH /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'PATCH') {
       // notify_resident is ours, not a case field: strip it before the RPC (which rejects unknown keys).
-      const { notify_resident: notify, ...patch } = body;
+      const { notify_resident: notify, ...patch } = body || {};
       if (notify !== undefined && typeof notify !== 'boolean') return json(400, { error: 'notify_resident must be true or false' });
       const data = await rpc('pma_mgr_case_update_v1', {
         request_id: id, actor_user_id: authUserId, patch,
