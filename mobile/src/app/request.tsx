@@ -31,7 +31,7 @@ export default function MaintenanceRequest() {
   const [last4, setLast4] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<{ message: string; key: string } | null>(null);
   const [result, setResult] = useState<RequestResult | null>(null);
   const scroll = useRef<ScrollViewInstance>(null);
 
@@ -47,8 +47,11 @@ export default function MaintenanceRequest() {
     });
   }, []);
 
-  // A message about a field goes away as soon as the resident changes something.
-  useEffect(() => { setError(null); }, [description, name, address, unit, phone, method, email, consent, code]);
+  // A message about a field goes away as soon as the resident changes something: each message is
+  // tied to the form's contents when it was shown (derived, so no effect is needed).
+  const formKey = JSON.stringify([description, name, address, unit, phone, method, email, consent, code]);
+  const setError = (message: string | null) => setErrorState(message ? { message, key: formKey } : null);
+  const error = errorState && errorState.key === formKey ? errorState.message : null;
 
   const go = (next: Step) => { setError(null); setStep(next); scroll.current?.scrollTo({ y: 0, animated: false }); };
 

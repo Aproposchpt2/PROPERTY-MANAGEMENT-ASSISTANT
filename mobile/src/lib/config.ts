@@ -1,8 +1,9 @@
+import { Platform } from 'react-native';
+
 // Public configuration only. EXPO_PUBLIC_ values are compiled into the app bundle,
 // so a service-role key, database password or other secret must never appear here.
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 export const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '';
-import { Platform } from 'react-native';
 
 // The phone app calls the PMA site; the web app is served from that same site (/app), so it uses
 // relative URLs (no cross-origin requests; works on Netlify deploy previews too).

@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, EmergencyNote } from '../components/ui';
-import { colors, fonts, radius } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
 import { MANAGER_ENABLED } from '../lib/config';
 
 export default function Welcome() {

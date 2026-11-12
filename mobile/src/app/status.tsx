@@ -16,24 +16,35 @@ export default function CaseStatus() {
   const [state, setState] = useState<'loading' | 'ready' | 'invalid' | 'error'>('loading');
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!token) { setState('invalid'); return; }
-    try {
-      const d = await getPortalCase(token);
-      setData(d);
-      setState('ready');
-      rememberCase({ token, caseNumber: d.caseNumber, status: d.status, seenAt: new Date().toISOString() }).catch(() => {});
-    } catch (e: any) {
-      if (e?.status === 404 || e?.status === 400) {
-        setState('invalid');
-        forgetCase(token).catch(() => {});
-      } else {
-        setState(prev => (prev === 'ready' ? 'ready' : 'error'));
-      }
+  // Apply a fetched case, or the failure, to the screen.
+  const apply = useCallback((d: PortalCase) => {
+    if (!token) return;
+    setData(d);
+    setState('ready');
+    rememberCase({ token, caseNumber: d.caseNumber, status: d.status, seenAt: new Date().toISOString() }).catch(() => {});
+  }, [token]);
+  const fail = useCallback((e: any) => {
+    if (e?.status === 404 || e?.status === 400) {
+      setState('invalid');
+      if (token) forgetCase(token).catch(() => {});
+    } else {
+      setState(prev => (prev === 'ready' ? 'ready' : 'error'));
     }
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  // Refresh, retry and pull-to-refresh.
+  const load = useCallback(async () => {
+    if (!token) return; // shown as an invalid link below, without setting state
+    try { apply(await getPortalCase(token)); } catch (e) { fail(e); }
+  }, [token, apply, fail]);
+
+  // First load; ignores a reply that arrives after the screen has closed.
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    getPortalCase(token).then(d => { if (active) apply(d); }, e => { if (active) fail(e); });
+    return () => { active = false; };
+  }, [token, apply, fail]);
   // Refresh when the app returns to the foreground and once a minute while open, like the web portal.
   useEffect(() => {
     const sub = AppState.addEventListener('change', st => { if (st === 'active') load(); });
@@ -41,8 +52,7 @@ export default function CaseStatus() {
     return () => { sub.remove(); clearInterval(timer); };
   }, [load]);
 
-  if (state === 'loading') return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading your case…</Text></Centered>;
-  if (state === 'invalid') {
+  if (!token || state === 'invalid') {
     return (
       <Centered>
         <Ionicons name="link" size={40} color={colors.muted} />
@@ -51,6 +61,7 @@ export default function CaseStatus() {
       </Centered>
     );
   }
+  if (state === 'loading') return <Centered><Text style={{ color: colors.body, fontFamily: fonts.regular }}>Loading your case…</Text></Centered>;
   if (state === 'error' || !data) {
     return (
       <Centered>

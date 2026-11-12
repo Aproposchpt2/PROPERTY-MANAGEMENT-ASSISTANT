@@ -152,3 +152,23 @@ Based on branch commit `75b6938`. Code and checks only; the owner starts the nex
 - Expo dashboard: **Build from GitHub → branch `claude/new-session-ykm5xi` → Android → profile `internal`**.
 - Confirm bottom-tab navigation, approval badge after an approval, all four case tabs, editable presets, returning from assignment without losing drafts, and sign-out on the next device build.
 - No browser/device preview, Expo build, production deploy or database verification was performed for this UI task. Acceptance of the three new status strings by the deployed database remains to be verified during owner review; no database change was made.
+
+## Launch progress — November 12, 2026
+
+Status of the remaining blockers above:
+
+| # | Blocker | Status |
+|---|---|---|
+| 1 | Mobile backend deployment | **Ready for owner review/merge.** `main` (PRs #30, #32, #33) merged into the branch (`7a74a3a`): `pma-manager-api.js` keeps the full `notify_resident` handling plus main's empty-body guard; `test/manager-presets.test.js` takes main's version. Nov 7 changes rechecked: texts still pin `PMA_SMS_FROM_NUMBER` (also in the new code and resident-update texts) and the own-line guard is intact. PR #31 now merges cleanly into `main`. |
+| — | **New: live save error for the three waiting statuses** | **Fixed in production.** `main`'s dashboard (PR #32) and the app offer Waiting on Parts / Waiting on Tenant Access / On Hold, but the database check allowed only six statuses, so those saves failed. Migration `20261112090000_pma_request_status_waiting_states.sql` applied to the live project and verified (rollback alongside). Residents see these statuses as **In Progress** (`status.html` on merge, and the app). |
+| 2 | Android push (Firebase/FCM) | Open — owner: Firebase project, `google-services.json`, FCM key in Expo (launch guide 3.2). |
+| 3 | iOS | Open — waiting on Apple enrollment approval. |
+| 4 | Approvals device test | Open — owner, on the next build. |
+| 5 | Lint | **Done.** `mobile/eslint.config.js` (Expo SDK 58 flat config), `npm run lint` passes with 0 problems. Two rules adjusted with reasons in the file (`react/no-unescaped-entities` off: apostrophes are fine in React Native text; `import/namespace` off for TypeScript: false positive on `Notifications.AndroidImportance`, TypeScript checks names). Code fixes: form-error clearing in `request.tsx` is now derived (no effect); the status screen's first load runs inside its effect and ignores late replies. **Sign-in and session files were not changed.** |
+
+Checks: root 190/190, mobile 20/20, typecheck clean, lint clean, Android bundle builds, web walkthrough
+(resident request and status, invalid and expired links, form error clearing, team dashboard, approval,
+alerts sign-up) passes.
+
+**Next build:** after the owner merges PR #31 (or before, to test the branch), Expo dashboard →
+Build from GitHub → `claude/new-session-ykm5xi` → Android → profile `internal`.
