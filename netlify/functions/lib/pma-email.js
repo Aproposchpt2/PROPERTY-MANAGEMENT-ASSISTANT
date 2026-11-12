@@ -154,4 +154,41 @@ async function sendStaffNotification({ to, caseNumber, env }) {
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification };
+const escapeHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// A manager's update, emailed to the resident who asked for updates by email. Throws on failure.
+async function sendResidentUpdate({ to, caseNumber, update, status, language = 'en', env }) {
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) {
+    throw Object.assign(new Error('EMAIL_NOT_CONFIGURED'), { code: 'EMAIL_NOT_CONFIGURED' });
+  }
+  const isEs = language === 'es';
+  const subject = isEs ? `Desert Ridge Customer Care — Actualización del caso #${caseNumber}` : `Desert Ridge Customer Care — Update on case #${caseNumber}`;
+  const intro = isEs ? 'Su equipo de la propiedad publicó una actualización sobre su solicitud.' : 'Your property team posted an update on your request.';
+  const statusLabel = isEs ? 'Estado' : 'Status';
+  const emergency = isEs ? 'En caso de emergencia, llame al 911.' : 'For life-safety emergencies, call 911 immediately.';
+  const text = `${intro}\n\n${statusLabel}: ${status}\n\n${update}\n\nCustomer Care Center: (725) 201-0584\n${emergency}`;
+  const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px">
+<tr><td style="background:#1a1a2e;padding:20px 28px;color:#fff;font-size:17px;font-weight:bold">Desert Ridge Customer Care</td></tr>
+<tr><td style="padding:28px">
+<p style="margin:0 0 12px;font-size:15px;color:#1a1a2e">${escapeHtml(intro)}</p>
+<p style="margin:0 0 4px;font-size:12px;color:#718096;text-transform:uppercase">Case #${escapeHtml(caseNumber)} · ${statusLabel}: ${escapeHtml(status)}</p>
+<p style="margin:12px 0 20px;font-size:15px;color:#2d3748;white-space:pre-wrap">${escapeHtml(update)}</p>
+<p style="margin:0 0 8px;font-size:14px;color:#4a5568"><strong>Customer Care Center:</strong> (725) 201-0584</p>
+<p style="margin:0;font-size:13px;color:#c53030"><strong>${escapeHtml(emergency)}</strong></p>
+</td></tr></table></body></html>`;
+  const { Resend } = require('resend');
+  const resend = new Resend(env.RESEND_API_KEY);
+  const result = await Promise.race([
+    resend.emails.send({ from: env.RESEND_FROM_EMAIL, to: [to], subject, html, text }),
+    new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('EMAIL_TIMEOUT'), { code: 'EMAIL_TIMEOUT' })), 8000)),
+  ]);
+  if (result.error) {
+    console.error(JSON.stringify({ event: 'pma_email_resident_update_failed', code: result.error.message }));
+    throw Object.assign(new Error(result.error.message || 'EMAIL_FAILED'), { code: 'EMAIL_FAILED' });
+  }
+  console.log(JSON.stringify({ event: 'pma_email_resident_update_sent', id: result.data.id }));
+  return { id: result.data.id };
+}
+
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendResidentUpdate };

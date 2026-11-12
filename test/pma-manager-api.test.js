@@ -157,3 +157,44 @@ test('500 on RPC error', async () => {
   assert.equal(res.statusCode, 500);
   rpcOverride = null;
 });
+
+test('PATCH strips notify_resident before the RPC and rejects non-boolean values', async () => {
+  authOverride = null;
+  let seen = null;
+  rpcOverride = async (name, args) => { seen = args; return { data: { success: true, status: 'Scheduled', priority: 'normal' }, error: null }; };
+  const bad = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { tenant_update: 'x', notify_resident: 'yes' }));
+  assert.equal(bad.statusCode, 400);
+  assert.equal(seen, null);
+  const res = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { status: 'Scheduled', notify_resident: false }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(seen.patch, { status: 'Scheduled' });
+  assert.equal(JSON.parse(res.body).notification, undefined);
+  rpcOverride = null;
+});
+
+test('PATCH with notify_resident reports the notification outcome', async () => {
+  authOverride = null;
+  rpcOverride = async () => ({ data: { success: true, status: 'Scheduled', priority: 'normal' }, error: null });
+  // The stubbed client has no table access, so the lookup fails and is reported, not thrown.
+  const res = await handler(makeEvent('PATCH', '/api/manager/cases/req_1', { tenant_update: 'Booked for 9am', notify_resident: true }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body).notification, { sent: false, state: 'FAILED', method: null });
+  rpcOverride = null;
+});
+
+test('push-token: DELETE allowed only there; invalid tokens rejected before any DB access', async () => {
+  authOverride = null;
+  assert.equal((await handler(makeEvent('DELETE', '/api/manager/cases/req_1'))).statusCode, 405);
+  assert.equal((await handler(makeEvent('POST', '/api/manager/push-token', { token: 'not-a-token', platform: 'ios' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('POST', '/api/manager/push-token', { token: 'ExponentPushToken[abc]', platform: 'web' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('DELETE', '/api/manager/push-token', { token: 'x' }))).statusCode, 400);
+  assert.equal((await handler(makeEvent('GET', '/api/manager/push-token'))).statusCode, 405);
+});
+
+test('push-test reports DISABLED when push is off', async () => {
+  authOverride = null;
+  delete process.env.PMA_PUSH_ENABLED;
+  const res = await handler(makeEvent('POST', '/api/manager/push-test', {}));
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).state, 'DISABLED');
+});

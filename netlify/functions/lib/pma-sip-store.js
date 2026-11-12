@@ -34,7 +34,10 @@ function createStore(env = process.env) {
       destination: args.destination,
       consent: args.consent,
     }),
-    close: ({ session_id, call_sid, sip_call_id }, transcript) => rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id, transcript: transcript || [] }),
+    // The protected 5-argument close (20261027050000). The transcript argument targeted a stray
+    // 6-argument version that could never run and is removed by 20261108110000; the transcript is
+    // not stored until a working, service-role-only RPC for it exists.
+    close: ({ session_id, call_sid, sip_call_id }, _transcript) => rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id }),
   };
 }
 

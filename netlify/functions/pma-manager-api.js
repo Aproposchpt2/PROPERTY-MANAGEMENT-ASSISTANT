@@ -2,6 +2,10 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { verifyManager } = require('./lib/pma-auth');
+const { notifyResident, addApprovalFields } = require('./lib/pma-resident-notify');
+const {
+  registerDevice, removeDevice, registerWebSubscription, removeWebSubscription, sendTestPush, webPushConfigured,
+} = require('./lib/pma-push');
 
 const CORS = {
   'content-type': 'application/json',
@@ -13,10 +17,13 @@ function json(statusCode, body) {
   return { statusCode, headers: CORS, body: JSON.stringify(body) };
 }
 
-function makeRpc(env) {
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+function makeDb(env) {
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function makeRpc(env, db) {
   return async (name, args) => {
     const { data, error } = await db.rpc(name, {
       t: env.PMA_TENANT_ID,
@@ -30,7 +37,8 @@ function makeRpc(env) {
 
 exports.handler = async function handler(event) {
   const env = process.env;
-  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod)) {
+  const isPushToken = /\/api\/manager\/(push-token|web-push)\/?$/.test(event.path || '');
+  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(event.httpMethod) && !(isPushToken && event.httpMethod === 'DELETE')) {
     return json(405, { error: 'Method not allowed' });
   }
   const auth = await verifyManager(event, env);
@@ -47,30 +55,72 @@ exports.handler = async function handler(event) {
   if (event.body) {
     try { body = JSON.parse(event.body); } catch { return json(400, { error: 'Invalid JSON' }); }
   }
-  const rpc = makeRpc(env);
+  const db = makeDb(env);
+  const rpc = makeRpc(env, db);
+  const scope = { db, tenantId: env.PMA_TENANT_ID, propertyId: env.PMA_PROPERTY_ID };
   try {
+    // POST /api/manager/push-token  { token, platform, prefs? }  register this phone / save preferences
+    // DELETE /api/manager/push-token { token }                   remove this phone (sign-out)
+    if (action === 'push-token' && !id) {
+      const r = event.httpMethod === 'POST'
+        ? await registerDevice({ db, env, auth, token: body.token, platform: body.platform, prefs: body.prefs })
+        : event.httpMethod === 'DELETE'
+          ? await removeDevice({ db, auth, token: body.token })
+          : { status: 405, body: { error: 'Method not allowed' } };
+      return json(r.status, r.body);
+    }
+    // GET /api/manager/web-push       { publicKey, enabled }  VAPID public key for the browser
+    // POST /api/manager/web-push      { subscription, prefs? } register this browser / save preferences
+    // DELETE /api/manager/web-push    { endpoint }             remove this browser (sign-out)
+    if (action === 'web-push' && !id) {
+      if (event.httpMethod === 'GET') {
+        return json(200, {
+          success: true,
+          publicKey: webPushConfigured(env) ? env.PMA_WEB_PUSH_PUBLIC_KEY : null,
+          enabled: env.PMA_PUSH_ENABLED === 'true' && webPushConfigured(env),
+        });
+      }
+      const r = event.httpMethod === 'POST'
+        ? await registerWebSubscription({ db, env, auth, subscription: body.subscription, prefs: body.prefs })
+        : event.httpMethod === 'DELETE'
+          ? await removeWebSubscription({ db, auth, endpoint: body.endpoint })
+          : { status: 405, body: { error: 'Method not allowed' } };
+      return json(r.status, r.body);
+    }
+    // POST /api/manager/push-test  send a test notification to my own phones and browsers
+    if (action === 'push-test' && !id && event.httpMethod === 'POST') {
+      const r = await sendTestPush({ db, env, auth });
+      return json(r.status, r.body);
+    }
     // GET /api/manager/cases
     if (action === 'cases' && !id && event.httpMethod === 'GET') {
       const params = event.queryStringParameters || {};
       const status_filter = params.status ? params.status.split(',') : null;
       const data = await rpc('pma_mgr_case_list_v1', { status_filter });
+      await addApprovalFields({ ...scope, cases: data && data.cases });
       return json(200, data);
     }
     // GET /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'GET') {
       const data = await rpc('pma_mgr_case_get_v1', { request_id: id });
       if (data && data.state === 'NOT_FOUND') return json(404, data);
+      if (data && data.success) await addApprovalFields({ ...scope, cases: [data] });
       return json(200, data);
     }
     // PATCH /api/manager/cases/:id
     if (action === 'cases' && id && !sub && event.httpMethod === 'PATCH') {
-      // The mobile app sends notify_resident with case updates. It is not a case field, and the
-      // RPC rejects unknown keys, so strip it here (resident texting ships with the mobile backend).
-      const { notify_resident: _notify, ...patch } = body || {};
+      // notify_resident is ours, not a case field: strip it before the RPC (which rejects unknown keys).
+      const { notify_resident: notify, ...patch } = body || {};
+      if (notify !== undefined && typeof notify !== 'boolean') return json(400, { error: 'notify_resident must be true or false' });
       const data = await rpc('pma_mgr_case_update_v1', {
         request_id: id, actor_user_id: authUserId, patch,
       });
       if (data && data.state === 'NOT_FOUND') return json(404, data);
+      if (data && data.success && notify === true && typeof patch.tenant_update === 'string' && patch.tenant_update.trim()) {
+        data.notification = await notifyResident({
+          ...scope, env, requestId: id, update: patch.tenant_update, actorUserId: authUserId,
+        });
+      }
       return json(200, data);
     }
     // POST /api/manager/cases/:id/assign

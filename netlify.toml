@@ -1,10 +1,17 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+  # Builds the PMA web app (mobile/) into ./app, served at /app. See scripts/build-web-app.sh.
+  command = "bash scripts/build-web-app.sh"
 
 [build.environment]
   NODE_VERSION = "22"
-  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,OWNER_NOTIFICATION_EMAIL,RESEND_FROM_EMAIL,RESEND_TO_EMAIL"
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,OWNER_NOTIFICATION_EMAIL,RESEND_FROM_EMAIL,RESEND_TO_EMAIL,EXPO_PUBLIC_SUPABASE_URL,EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,EXPO_PUBLIC_PMA_PHONE,EXPO_PUBLIC_ENABLE_MANAGER,PMA_WEB_PUSH_PUBLIC_KEY,PMA_WEB_PUSH_SUBJECT"
+  # Public values compiled into the web app. Never put a secret in an EXPO_PUBLIC_ variable.
+  EXPO_PUBLIC_SUPABASE_URL = "https://vqrqyanqsiqzsmlhytaz.supabase.co"
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_S0l5GIDgAiECvhL-03FUkA_r8kjUjr9"
+  EXPO_PUBLIC_PMA_PHONE = "+17252010584"
+  EXPO_PUBLIC_ENABLE_MANAGER = "true"
 
 [build.processing]
   [build.processing.css]
@@ -23,6 +30,9 @@
     timeout = 26
 
   [functions."ops-trace-api"]
+    timeout = 26
+
+  [functions."pma-app-api"]
     timeout = 26
 
 # The site publishes the repo root, so internal folders and files are blocked here.
@@ -60,6 +70,12 @@
 
 [[redirects]]
   from = "/test/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/mobile/*"
   to = "/404.html"
   status = 404
   force = true
@@ -145,6 +161,25 @@
 [[redirects]]
   from = "/api/manager/*"
   to = "/.netlify/functions/pma-manager-api"
+  status = 200
+  force = true
+
+# PMA web app (built into ./app on deploy). Real files are served first; any other /app path
+# is an app screen, so it gets the app's index.html (not forced, so files are never shadowed).
+[[redirects]]
+  from = "/app"
+  to = "/app/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/app/*"
+  to = "/app/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/app/*"
+  to = "/.netlify/functions/pma-app-api"
   status = 200
   force = true
 
@@ -234,3 +269,20 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     Cache-Control = "no-store"
+
+# PMA web app: never indexed; the service worker and page always revalidate so a deploy reaches
+# every installed home-screen app straight away.
+[[headers]]
+  for = "/app/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/app/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/app/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"

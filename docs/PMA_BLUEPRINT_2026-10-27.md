@@ -131,6 +131,9 @@ Call ends
 | `RESEND_API_KEY` | Email (Resend) |
 | `RESEND_FROM_EMAIL` | From address |
 | `OPENAI_WEBHOOK_SECRET` | SIP/OpenAI bridge (staged) |
+| `PMA_APP_VERIFY_SECRET` | Mobile app phone-check codes (`/api/app/*`), ≥ 32 random characters. See `PMA_MOBILE_BLUEPRINT_2026-11-08.md` |
+| `PMA_PUSH_ENABLED` | `true` to send manager push notifications (new case, emergency, cost approval) |
+| `EXPO_ACCESS_TOKEN` | Optional; only if enhanced push security is on for the EAS project |
 
 ---
 
