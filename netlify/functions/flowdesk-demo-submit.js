@@ -4,7 +4,7 @@ const { buildCorsHeaders, handleOptions } = require('./lib/flowdesk-cors');
 const { getSupabaseAdmin } = require('./lib/flowdesk-supabase-admin');
 const { json, error, parseJsonBody } = require('./lib/flowdesk-response-utils');
 
-const TWILIO_COMPLIANCE = '\nReply STOP to unsubscribe. Reply HELP for help. Msg & data rates may apply. AI4 Businesses aiflowdeskpro.com';
+const TWILIO_COMPLIANCE = '\nMsg frequency varies. Msg & data rates may apply. Reply STOP to opt out, HELP for help.';
 
 function esc(v) {
   return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -127,7 +127,7 @@ exports.handler = async (event) => {
   // SMS if consented
   if (smsConsented && phone) {
     try {
-      await sendTwilioSms(phone, `Hi ${firstName}, your FlowDesk Pro Contact Center demo is confirmed for ${biz}. We'll reach out within one business day.`);
+      await sendTwilioSms(phone, `Stellar Intelligent Software Developers: Hi ${firstName}, your AI Contact Center demo is confirmed for ${biz}. We'll reach out within one business day.`);
     } catch (e) { console.error('SMS failed:', e.message); }
   }
 

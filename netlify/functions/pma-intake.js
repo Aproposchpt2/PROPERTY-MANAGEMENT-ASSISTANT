@@ -13,7 +13,7 @@ const LEAD_TENANT_ID = process.env.AI4CC_LEAD_TENANT_ID || '5885a020-d363-4c27-9
 const ACTOR_USER_ID = process.env.AI4CC_INTAKE_FALLBACK_ACTOR_ID || '735fc481-1b75-4cf3-9f68-128e9e169fdc';
 const SOURCE = 'pma_stellaruc_intake';
 const SMS_CONSENT_TEXT =
-  'Yes, StellarUC (Apropos Group LLC) may send me text messages about my inquiry and consultation. ' +
+  'Yes, Stellar Intelligent Software Developers (a DBA of Apropos Group LLC) may send me text messages about my inquiry and consultation. ' +
   'Message frequency varies. Msg & data rates may apply. Reply STOP to opt out or HELP for help. ' +
   'Consent is not a condition of purchase.';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
