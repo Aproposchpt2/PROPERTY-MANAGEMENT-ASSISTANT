@@ -202,7 +202,7 @@ exports.handler = async function handler(event) {
       if (data && data.success && data.windowState === 'PROPOSED' && data.tenantPhone) {
         await sendVendorSms({
           to: data.tenantPhone,
-          body: `Desert Ridge: Your maintenance case #${body.case_number} has a proposed service window. ` +
+          body: `Stellar Intelligent Software Developers: Your maintenance case #${body.case_number} has a proposed service window. ` +
             `Your manager will confirm shortly.`,
           env,
         }).catch(() => {});

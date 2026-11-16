@@ -10,8 +10,8 @@ async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLin
   const params = {
     to,
     body: language === 'es'
-      ? `StellarUC: Su solicitud de mantenimiento fue registrada. Caso #${caseNumber}. En caso de emergencia llame al 911. Frecuencia de mensajes variable. Pueden aplicar tarifas de mensajes y datos. Responda AYUDA para ayuda o STOP para cancelar.${portalLink ? ' ' + portalLink : ''}`
-      : `Desert Ridge Customer Care: your maintenance request is on file. Case #${caseNumber}. For emergencies call 911. Reply STOP to opt out.${portalLink ? ' ' + portalLink : ''}`,
+      ? `Stellar Intelligent Software Developers: Su solicitud de mantenimiento fue registrada. Caso #${caseNumber}. En caso de emergencia llame al 911. Frecuencia de mensajes variable. Pueden aplicar tarifas de mensajes y datos. Responda AYUDA para ayuda o STOP para cancelar.${portalLink ? ' ' + portalLink : ''}`
+      : `Stellar Intelligent Software Developers: Your maintenance request is on file. Case #${caseNumber}. For emergencies call 911. Reply STOP to opt out, HELP for help.${portalLink ? ' ' + portalLink : ''}`,
   };
   // With a Messaging Service, also pass From so Twilio always uses PMA's own number from the
   // sender pool instead of Sticky Sender or area-code geomatch picking another line (2026-11-07).
