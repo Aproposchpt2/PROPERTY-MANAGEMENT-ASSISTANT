@@ -19,30 +19,30 @@
 .chip{background:none;border:1px solid var(--line);color:var(--muted);padding:6px 14px;font-size:12px;cursor:pointer}
 .chip.active{border-color:var(--gold);color:var(--light)}
 .case-grid{display:flex;flex-direction:column;gap:10px}
-.case-card{border:1px solid var(--line);background:#101010;padding:18px 20px;cursor:pointer;transition:border-color .2s}
+.case-card{border:1px solid var(--line);background:#050505;padding:18px 20px;cursor:pointer;transition:border-color .2s}
 .case-card:hover{border-color:rgba(200,168,75,.6)}
 .case-card.emergency{border-left:3px solid #c53030}
 .case-row1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .case-num{font:500 22px 'Cormorant Garamond',serif;color:var(--ivory)}
 .badge{font:400 9px 'Syncopate',sans-serif;padding:3px 8px;letter-spacing:.06em}
-.badge.emergency{background:#2d0000;color:#fc8181;border:1px solid #c53030}
-.badge.warn{background:#1a1200;color:#d4a800;border:1px solid rgba(200,168,75,.5)}
-.badge.lang{background:#111;color:var(--muted);border:1px solid var(--line)}
-.badge.nte-pending{background:#0e1a2b;color:#63b3ed;border:1px solid rgba(99,179,237,.5)}
-.badge.nte-approved{background:#0a1f12;color:#68d391;border:1px solid rgba(104,211,145,.4)}
+.badge.emergency{background:#050505;color:#fc8181;border:1px solid #c53030}
+.badge.warn{background:#050505;color:#E4C878;border:1px solid rgba(200,168,75,.5)}
+.badge.lang{background:#050505;color:var(--muted);border:1px solid var(--line)}
+.badge.nte-pending{background:#050505;color:#F7F4EC;border:1px solid rgba(200,168,75,.5)}
+.badge.nte-approved{background:#050505;color:#F7F4EC;border:1px solid rgba(200,168,75,.4)}
 .case-status{font-size:11px;color:var(--gold);margin-left:auto}
 .case-desc{font-size:13px;color:var(--body);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:700px}
 .case-meta{font-size:11px;color:var(--muted);margin-top:4px}
-.panel{position:fixed;top:0;right:0;bottom:0;width:min(620px,100vw);background:#111;border-left:1px solid var(--line);overflow-y:auto;z-index:50;transform:translateX(100%);transition:transform .3s}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(620px,100vw);background:#050505;border-left:1px solid var(--line);overflow-y:auto;z-index:50;transform:translateX(100%);transition:transform .3s}
 .panel.open{transform:none}
-.panel-head{display:flex;align-items:center;gap:12px;padding:22px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#111;z-index:5}
+.panel-head{display:flex;align-items:center;gap:12px;padding:22px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#050505;z-index:5}
 .panel-head h2{font:500 28px 'Cormorant Garamond',serif;margin:0;flex:1}
 .panel-body{padding:24px}
 .field-row{margin-bottom:18px}
 .field-label{font:400 10px 'Syncopate',sans-serif;color:var(--gold);letter-spacing:.07em;display:block;margin-bottom:6px}
 .field-val{font-size:14px;color:var(--ivory);line-height:1.6}
 .field-val.muted{color:var(--muted)}
-.field-input{width:100%;background:#1a1a1a;border:1px solid var(--line);color:var(--ivory);padding:10px 14px;font:400 14px 'DM Sans',sans-serif;resize:vertical}
+.field-input{width:100%;background:#050505;border:1px solid var(--line);color:var(--ivory);padding:10px 14px;font:400 14px 'DM Sans',sans-serif;resize:vertical}
 .field-input:focus{outline:none;border-color:var(--gold)}
 select.field-input{appearance:none;cursor:pointer}
 .section-sep{font:400 10px 'Syncopate',sans-serif;color:var(--gold);letter-spacing:.07em;border-top:1px solid var(--line);padding-top:20px;margin:24px 0 14px}
@@ -51,16 +51,16 @@ select.field-input{appearance:none;cursor:pointer}
 .tl-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:0 0 8px;margin-top:6px}
 .tl-text{font-size:13px;color:var(--body)}.tl-time{font-size:11px;color:var(--muted)}
 .vendor-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
-.vendor-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);background:#101010;font-size:13px}
+.vendor-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);background:#050505;font-size:13px}
 .vendor-row .vname{flex:1;color:var(--ivory)}.vendor-row .vtrade{color:var(--muted);font-size:12px}
 .login-wrap{max-width:440px;margin:140px auto;padding:0 22px}
-.login-card{border:1px solid var(--line);background:#101010;padding:40px}
+.login-card{border:1px solid var(--line);background:#050505;padding:40px}
 .login-card h1{font:500 44px 'Cormorant Garamond',serif;margin:0 0 8px}
 .login-card p{color:var(--body);font-size:14px;margin:0 0 28px}
 .login-msg{font-size:13px;color:var(--gold);margin-top:14px;min-height:20px}
 .overlay{position:fixed;inset:0;background:rgba(5,5,5,.6);z-index:40;display:none}
 .overlay.open{display:block}
-.vendor-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(500px,92vw);background:#131313;border:1px solid var(--line);padding:32px;z-index:60;display:none}
+.vendor-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(500px,92vw);background:#050505;border:1px solid var(--line);padding:32px;z-index:60;display:none}
 .vendor-modal.open{display:block}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
 </style>

@@ -12,8 +12,8 @@
     html { scroll-behavior: smooth; }
     body {
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: #F8F9FA;
-      color: #333333;
+      background: #F7F4EC;
+      color: #050505;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -21,12 +21,12 @@
 
     /* NAV */
     nav {
-      background: #1B3A6B;
+      background: #050505;
       padding: 16px 40px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      box-shadow: 0 2px 8px rgba(27,58,107,0.18);
+      box-shadow: 0 2px 8px rgba(200,168,75,0.18);
     }
     .nav-brand {
       display: flex;
@@ -43,7 +43,7 @@
       place-items: center;
       font-weight: 400;
       font-size: 1rem;
-      color: #fff;
+      color: #F7F4EC;
       letter-spacing: -0.02em;
     }
     .nav-brand-text {
@@ -53,19 +53,19 @@
     .nav-brand-name {
       font-size: 1rem;
       font-weight: 400;
-      color: #ffffff;
+      color: #F7F4EC;
       line-height: 1.2;
       letter-spacing: -0.01em;
     }
     .nav-brand-sub {
       font-size: 0.68rem;
-      color: rgba(255,255,255,0.65);
+      color: rgba(247,244,236,0.65);
       font-weight: 400;
       letter-spacing: 0.04em;
     }
     .nav-back {
       font-size: 0.82rem;
-      color: rgba(255,255,255,0.75);
+      color: rgba(247,244,236,0.75);
       text-decoration: none;
       transition: color 0.2s;
     }
@@ -88,9 +88,9 @@
     .page-header { margin-bottom: 32px; }
     .page-kicker {
       display: inline-block;
-      background: rgba(27,58,107,0.08);
-      border: 1px solid rgba(27,58,107,0.2);
-      color: #1B3A6B;
+      background: rgba(200,168,75,0.08);
+      border: 1px solid rgba(200,168,75,0.2);
+      color: #050505;
       font-size: 0.7rem;
       font-weight: 400;
       letter-spacing: 0.12em;
@@ -102,24 +102,24 @@
     .page-title {
       font-size: clamp(1.6rem, 4vw, 2.2rem);
       font-weight: 400;
-      color: #1B3A6B;
+      color: #050505;
       line-height: 1.2;
       margin-bottom: 10px;
       letter-spacing: -0.02em;
     }
     .page-subtitle {
       font-size: 1rem;
-      color: #555555;
+      color: #F7F4EC;
       line-height: 1.65;
     }
 
     /* FORM CARD */
     .form-card {
-      background: #ffffff;
-      border: 1px solid #E2E6EC;
+      background: #F7F4EC;
+      border: 1px solid #F7F4EC;
       border-radius: 12px;
       padding: 36px;
-      box-shadow: 0 4px 24px rgba(27,58,107,0.07);
+      box-shadow: 0 4px 24px rgba(200,168,75,0.07);
     }
 
     .field { margin-bottom: 20px; }
@@ -129,7 +129,7 @@
       display: block;
       font-size: 0.82rem;
       font-weight: 400;
-      color: #1B3A6B;
+      color: #050505;
       margin-bottom: 6px;
       letter-spacing: 0.01em;
     }
@@ -139,20 +139,20 @@
     input[type="tel"],
     textarea {
       width: 100%;
-      background: #ffffff;
-      border: 1px solid #C8D0DC;
+      background: #F7F4EC;
+      border: 1px solid #F7F4EC;
       border-radius: 6px;
       padding: 11px 14px;
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 0.93rem;
-      color: #333333;
+      color: #050505;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input::placeholder, textarea::placeholder { color: #9CA3AF; }
+    input::placeholder, textarea::placeholder { color: #F7F4EC; }
     input:focus, textarea:focus {
-      border-color: #1B3A6B;
-      box-shadow: 0 0 0 3px rgba(27,58,107,0.12);
+      border-color: rgba(200,168,75,.25);
+      box-shadow: 0 0 0 3px rgba(200,168,75,0.12);
     }
     input.error, textarea.error { border-color: #DC2626; }
     textarea { resize: vertical; min-height: 100px; }
@@ -167,8 +167,8 @@
 
     /* SMS OPT-IN */
     .sms-opt-in {
-      background: #F8F9FA;
-      border: 1px solid #E2E6EC;
+      background: #F7F4EC;
+      border: 1px solid #F7F4EC;
       border-radius: 6px;
       padding: 14px 16px;
       margin-bottom: 20px;
@@ -184,17 +184,17 @@
       flex-shrink: 0;
       width: 15px;
       height: 15px;
-      accent-color: #1B3A6B;
+      accent-color: #050505;
     }
     .sms-opt-in .sms-text {
       font-size: 0.82rem;
-      color: #444444;
+      color: #050505;
       line-height: 1.55;
     }
-    .sms-opt-in .sms-text a { color: #1B3A6B; }
+    .sms-opt-in .sms-text a { color: #050505; }
     .sms-note {
       font-size: 0.75rem;
-      color: #666666;
+      color: #F7F4EC;
       margin: 8px 0 0 25px;
       line-height: 1.5;
     }
@@ -203,8 +203,8 @@
     .submit-btn {
       width: 100%;
       padding: 14px;
-      background: #1B3A6B;
-      color: #ffffff;
+      background: #050505;
+      color: #F7F4EC;
       border: none;
       border-radius: 6px;
       font-family: 'Inter', system-ui, sans-serif;
@@ -222,7 +222,7 @@
 
     .form-note {
       font-size: 0.78rem;
-      color: #888888;
+      color: #F7F4EC;
       text-align: center;
       margin-top: 14px;
       line-height: 1.5;
@@ -238,8 +238,8 @@
       width: 60px;
       height: 60px;
       border-radius: 50%;
-      background: rgba(27,58,107,0.08);
-      border: 2px solid #1B3A6B;
+      background: rgba(200,168,75,0.08);
+      border: 2px solid rgba(200,168,75,.25);
       display: grid;
       place-items: center;
       margin: 0 auto 1.2rem;
@@ -247,23 +247,23 @@
     .success-icon svg {
       width: 26px;
       height: 26px;
-      stroke: #1B3A6B;
+      stroke: #050505;
       fill: none;
       stroke-width: 2.5;
     }
     .success-state h3 {
       font-size: 1.5rem;
       font-weight: 400;
-      color: #1B3A6B;
+      color: #050505;
       margin-bottom: 0.5rem;
     }
-    .success-state p { color: #555555; }
+    .success-state p { color: #F7F4EC; }
 
     /* ERROR */
     .form-general-error {
       display: none;
-      background: #FEF2F2;
-      border: 1px solid #FECACA;
+      background: #F7F4EC;
+      border: 1px solid #F7F4EC;
       border-radius: 6px;
       padding: 10px 14px;
       font-size: 0.86rem;
@@ -275,7 +275,7 @@
 
     /* FOOTER */
     footer {
-      background: #1B3A6B;
+      background: #050505;
       padding: 20px 40px;
       text-align: center;
     }
@@ -289,14 +289,14 @@
     }
     .footer-links a {
       font-size: 0.8rem;
-      color: rgba(255,255,255,0.7);
+      color: rgba(247,244,236,0.7);
       text-decoration: none;
       transition: color 0.2s;
     }
     .footer-links a:hover { color: #B8860B; }
     .footer-copy {
       font-size: 0.75rem;
-      color: rgba(255,255,255,0.45);
+      color: rgba(247,244,236,0.45);
     }
 
     @media (max-width: 560px) {
