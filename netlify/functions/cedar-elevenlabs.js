@@ -147,6 +147,16 @@ const CALL_SID_RE = /^[!-~]{1,200}$/;
 
 // Pre-format the vendor window in the property's time zone so Ava reads it
 // verbatim instead of converting UTC timestamps herself.
+// The case number spelled out for Ava to read verbatim. 2026-11-17 E2E: after a MULTIPLE_CASES
+// list, Ava read the first listed number instead of the one this lookup returned.
+function spellCaseNumber(cn) {
+  return String(cn).split('').map((c) => (c === '-' ? 'dash' : c)).join(', ');
+}
+function withSpokenCase(r) {
+  if (!r || !r.success || !r.caseNumber) return r;
+  return { ...r, caseNumberSpoken: spellCaseNumber(r.caseNumber) };
+}
+
 function withSpokenWindow(r) {
   if (!r || !r.success || !r.scheduledStart) return r;
   const tz = r.propertyTimezone || 'America/Los_Angeles';
@@ -377,7 +387,7 @@ async function handle(event, ctx = {}) {
       const callerNum = caller_number_raw && E164_RE.test(caller_number_raw) ? caller_number_raw : null;
       const caseNum = parameters.case_number || null;
       const result = await store.lookupCase({ caller_number: callerNum, case_number: caseNum });
-      return respond(result ? withSpokenWindow(result) : { success: false, state: 'NOT_FOUND' });
+      return respond(result ? withSpokenCase(withSpokenWindow(result)) : { success: false, state: 'NOT_FOUND' });
     }
     if (tool_name === 'close_session') {
       const result = await store.close({ session_id, call_sid });

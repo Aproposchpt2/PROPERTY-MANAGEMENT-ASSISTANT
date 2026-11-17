@@ -854,3 +854,9 @@ test('a different number the caller names is kept', async () => {
   await post({ ...portalSmsBody, call_sid: 'CA_ownline_3', conversation_id: 'conv_ownline_3', caller_id: '+17023087429', destination: '+17025550199' }, { 'x-pma-tool-key': KEY });
   assert.equal(calls.find((c) => c[0] === 'recordPreference')[1].args.destination, '+17025550199');
 });
+
+test('get_case_status success includes the case number spelled for read-back', async () => {
+  const res = await post({ tool_name: 'get_case_status', call_sid: 'CA_spell_1', conversation_id: 'conv_spell_1', caller_id: '+17025550100', case_number: 'PMA-19EF63CFA3' }, { 'x-pma-tool-key': KEY });
+  const out = JSON.parse(res.body);
+  assert.equal(out.caseNumberSpoken, 'I, N, C, dash, 1'); // stub case INC-1
+});
