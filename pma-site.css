@@ -158,3 +158,4 @@
 footer .copyright{font-size:11px;color:var(--muted)}
 
 .hero .pma-product-heading,.hero .pma-product-heading span,.hero .pma-product-heading em{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;font-style:normal}
+.hero .pma-product-heading span{margin-right:.3em}
