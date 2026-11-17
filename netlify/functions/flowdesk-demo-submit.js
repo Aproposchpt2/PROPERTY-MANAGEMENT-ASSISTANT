@@ -62,7 +62,7 @@ exports.handler = async (event) => {
   }
 
   const smsConsented = sms_consent === 'yes' || sms_consent === true;
-  const demoSite = demo_site || 'contact-center.aiflowdeskpro.com';
+  const demoSite = demo_site || 'pma.stellaruc.com';
 
   const supabase = getSupabaseAdmin();
   const { data, error: dbErr } = await supabase
