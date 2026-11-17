@@ -833,3 +833,24 @@ test('the call that filed the case keeps the normal path even with a case number
   assert.ok(calls.some((c) => c[0] === 'claimSms'));
   delete process.env.PMA_SMS_ENABLED;
 });
+
+// ---- 2026-11-17 audit: a text must never go to one of our own lines ---------
+test('sms destination equal to the PMA line is replaced by the caller number, with no env set', async () => {
+  calls.length = 0;
+  for (const k of ['PMA_SMS_FROM_NUMBER', 'PMA_VENDOR_FROM', 'TWILIO_PHONE_NUMBER']) delete process.env[k];
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_1', conversation_id: 'conv_ownline_1', caller_id: '+17023087429', destination: '+17252010584' }, { 'x-pma-tool-key': KEY });
+  const pref = calls.find((c) => c[0] === 'recordPreference')[1];
+  assert.equal(pref.args.destination, '+17023087429');
+});
+
+test('sms destination equal to another Stellar line is replaced too', async () => {
+  calls.length = 0;
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_2', conversation_id: 'conv_ownline_2', caller_id: '+17023087429', destination: '(725) 330-5102' }, { 'x-pma-tool-key': KEY });
+  assert.equal(calls.find((c) => c[0] === 'recordPreference')[1].args.destination, '+17023087429');
+});
+
+test('a different number the caller names is kept', async () => {
+  calls.length = 0;
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_3', conversation_id: 'conv_ownline_3', caller_id: '+17023087429', destination: '+17025550199' }, { 'x-pma-tool-key': KEY });
+  assert.equal(calls.find((c) => c[0] === 'recordPreference')[1].args.destination, '+17025550199');
+});

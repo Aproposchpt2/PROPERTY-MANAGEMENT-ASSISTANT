@@ -34,7 +34,8 @@ function createStore(env = process.env) {
       destination: args.destination,
       consent: args.consent,
     }),
-    close: ({ session_id, call_sid, sip_call_id }, transcript) => rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id, transcript: transcript || [] }),
+    // The transcript overload was dropped 2026-11-17 (it made every close ambiguous and never ran).
+    close: ({ session_id, call_sid, sip_call_id }) => rpc('pma_voice_session_close_v1', { session_id, call_sid, sip_call_id }),
   };
 }
 
