@@ -110,7 +110,9 @@ async function issuePortalLink(store, requestId, env) {
 // Return caller asking for a text or email about a case filed earlier from the same phone.
 // Sends the tenant confirmation only: staff were already told when the case was filed.
 async function followupContact({ store, callerNumber, caseNumber, args, env }) {
-  const channels = { sms: ['./lib/pma-sms', env.PMA_SMS_ENABLED], email: ['./lib/pma-email', env.PMA_EMAIL_ENABLED] };
+  // Static requires: esbuild cannot bundle require(variable), which made every follow-up
+  // send fail with MODULE_NOT_FOUND in production (found by the 2026-11-17 E2E suite).
+  const channels = { sms: [() => require('./lib/pma-sms'), env.PMA_SMS_ENABLED], email: [() => require('./lib/pma-email'), env.PMA_EMAIL_ENABLED] };
   const channel = channels[args.method];
   if (channel && channel[1] !== 'true') return { success: true, notificationSent: false, notificationState: 'DISABLED' };
   const result = await store.recordFollowupPreference({ caller_number: callerNumber, case_number: caseNumber, args });
@@ -122,7 +124,7 @@ async function followupContact({ store, callerNumber, caseNumber, args, env }) {
   let errorCode = null;
   try {
     const portalLink = await issuePortalLink(store, result.requestId, env);
-    const sent = await require(channel[0]).sendCaseConfirmation({ to: args.destination, caseNumber: result.caseNumber, language: result.language, portalLink, env });
+    const sent = await channel[0]().sendCaseConfirmation({ to: args.destination, caseNumber: result.caseNumber, language: result.language, portalLink, env });
     outcome = 'SENT';
     messageRef = sent.sid || sent.id || null;
   } catch (sendErr) {
