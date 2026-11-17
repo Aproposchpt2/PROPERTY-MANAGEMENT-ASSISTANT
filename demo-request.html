@@ -6,7 +6,7 @@
   <title>AI Contact Center Demo Request — Stellar Intelligent Software Developers</title>
   <meta name="description" content="Request a live demo of the Stellar AI Contact Center. Experience the most human-sounding AI receptionist available." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=DM+Sans:wght@400;500&family=Syncopate:wght@400&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
@@ -41,7 +41,7 @@
       border-radius: 8px;
       display: grid;
       place-items: center;
-      font-weight: 700;
+      font-weight: 400;
       font-size: 1rem;
       color: #fff;
       letter-spacing: -0.02em;
@@ -52,7 +52,7 @@
     }
     .nav-brand-name {
       font-size: 1rem;
-      font-weight: 700;
+      font-weight: 400;
       color: #ffffff;
       line-height: 1.2;
       letter-spacing: -0.01em;
@@ -92,7 +92,7 @@
       border: 1px solid rgba(27,58,107,0.2);
       color: #1B3A6B;
       font-size: 0.7rem;
-      font-weight: 600;
+      font-weight: 400;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       padding: 5px 12px;
@@ -101,7 +101,7 @@
     }
     .page-title {
       font-size: clamp(1.6rem, 4vw, 2.2rem);
-      font-weight: 700;
+      font-weight: 400;
       color: #1B3A6B;
       line-height: 1.2;
       margin-bottom: 10px;
@@ -128,7 +128,7 @@
     label.field-label {
       display: block;
       font-size: 0.82rem;
-      font-weight: 600;
+      font-weight: 400;
       color: #1B3A6B;
       margin-bottom: 6px;
       letter-spacing: 0.01em;
@@ -209,7 +209,7 @@
       border-radius: 6px;
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 0.95rem;
-      font-weight: 600;
+      font-weight: 400;
       cursor: pointer;
       transition: background 0.2s, transform 0.15s;
       letter-spacing: 0.01em;
@@ -253,7 +253,7 @@
     }
     .success-state h3 {
       font-size: 1.5rem;
-      font-weight: 700;
+      font-weight: 400;
       color: #1B3A6B;
       margin-bottom: 0.5rem;
     }
@@ -305,8 +305,31 @@
       .field-row { grid-template-columns: 1fr; gap: 0; }
       footer { padding: 18px 20px; }
     }
+
+    /* STELLAR brand override */
+    body{font-family:'DM Sans',sans-serif;background:#050505;color:#F7F4EC}
+    nav{background:#050505;box-shadow:none;border-bottom:1px solid rgba(200,168,75,.25)}
+    footer{background:#050505;border-top:1px solid rgba(200,168,75,.25)}
+    .nav-logo-mark{background:transparent;border:1px solid #C8A84B;color:#C8A84B;font-family:'Cormorant Garamond',serif;font-size:1.4rem}
+    .nav-brand-name{font-family:'Cormorant Garamond',serif;font-size:1.25rem;color:#F7F4EC}
+    .nav-brand-sub,.nav-back,.footer-links a,.footer-copy{color:#F7F4EC}
+    .nav-back:hover,.footer-links a:hover{color:#E4C878}
+    .page-kicker{background:transparent;border-color:rgba(200,168,75,.4);color:#C8A84B;font-family:'Syncopate',sans-serif;font-size:10px}
+    .page-title,.success-state h3{font-family:'Cormorant Garamond',serif;color:#F7F4EC}
+    .page-subtitle,.success-state p,.sms-opt-in .sms-text,.sms-note,.form-note{color:#F7F4EC}
+    .form-card,.sms-opt-in{background:#050505;border-color:rgba(200,168,75,.25);box-shadow:none}
+    label.field-label{font-family:'Syncopate',sans-serif;font-size:10px;color:#E4C878}
+    .form-card input:not([type=checkbox]),.form-card textarea,.form-card select{background:#050505;border-color:rgba(247,244,236,.2);color:#F7F4EC;font-family:'DM Sans',sans-serif}
+    input::placeholder,textarea::placeholder{color:rgba(247,244,236,.45)}
+    .form-card input:not([type=checkbox]):focus,.form-card textarea:focus{border-color:#C8A84B;box-shadow:0 0 0 3px rgba(200,168,75,.15)}
+    .form-card input.error,.form-card textarea.error{border-color:#DC2626}
+    .sms-opt-in input[type="checkbox"]{accent-color:#C8A84B}
+    .sms-opt-in .sms-text a{color:#E4C878}
+    .submit-btn{background:#C8A84B;color:#050505;font-family:'DM Sans',sans-serif}
+    .submit-btn:hover:not(:disabled){background:#E4C878}
+    .success-icon{background:transparent;border-color:#C8A84B}.success-icon svg{stroke:#C8A84B}
   </style>
-</head>
+<style id="stellar-no-bold">:where(b,strong,th,h1,h2,h3,h4,h5,h6,dt,legend,optgroup){font-weight:400}</style></head>
 <body>
 
   <nav>
