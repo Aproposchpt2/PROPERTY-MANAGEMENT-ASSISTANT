@@ -66,16 +66,18 @@ require.cache[require.resolve(storePath)] = {
       },
       issuePortalToken: async (a) => {
         calls.push(['issuePortalToken', a]);
-        return storeOverrides.issuePortalToken ? storeOverrides.issuePortalToken(a) : { success: true, exists: false };
+        return storeOverrides.issuePortalToken
+          ? storeOverrides.issuePortalToken(a)
+          : { success: true };
       },
     }),
   },
 };
 
-// Stub the pma-sms module so no SMS is sent and no Twilio client is loaded.
-// Capture the real dedupe helper first: the handler uses it to decide how many
-// staff texts to send, so the stub must run the real logic — a copy here would
-// only test itself.
+// Stub pma-sms so no Twilio is touched.
+// Capture the real dedupe helper before the pma-sms stub below replaces the
+// module for the handler: the handler uses it to decide how many staff texts
+// to send, so the stub must run the real logic - a copy here would only test itself.
 const { dedupePhoneNumbers } = require('../netlify/functions/lib/pma-sms.js');
 const smsPath = path.join(__dirname, '../netlify/functions/lib/pma-sms.js');
 require.cache[require.resolve(smsPath)] = {
@@ -85,15 +87,24 @@ require.cache[require.resolve(smsPath)] = {
   exports: {
     sendCaseConfirmation: async (a) => {
       calls.push(['sendCaseConfirmation', a]);
-      return smsOverrides.sendCaseConfirmation ? smsOverrides.sendCaseConfirmation(a) : { sid: 'SM_claim' };
+      if (smsOverrides.sendCaseConfirmation) return smsOverrides.sendCaseConfirmation(a);
+      return { sid: 'SM_test_123' };
     },
-    sendStaffNotification: async (a) => { calls.push(['sendStaffNotification', a]); },
-    sendEmergencyEscalation: async (a) => { calls.push(['sendEmergencyEscalation', a]); },
+    sendStaffNotification: async (a) => {
+      calls.push(['sendStaffNotification', a]);
+    },
+    sendEmergencyEscalation: async (a) => {
+      calls.push(['sendEmergencyEscalation', a]);
+      if (smsOverrides.sendEmergencyEscalation) return smsOverrides.sendEmergencyEscalation(a);
+    },
     dedupePhoneNumbers,
   },
 };
 
-// Stub the pma-email module.
+// Mutable overrides for email per-test behaviour.
+const emailOverrides = {};
+
+// Stub pma-email so no Resend is touched.
 const emailPath = path.join(__dirname, '../netlify/functions/lib/pma-email.js');
 require.cache[require.resolve(emailPath)] = {
   id: emailPath,
@@ -101,112 +112,588 @@ require.cache[require.resolve(emailPath)] = {
   loaded: true,
   exports: {
     sendCaseConfirmation: async (a) => {
-      calls.push(['sendCaseConfirmation', a]);
-      return smsOverrides.sendCaseConfirmation ? smsOverrides.sendCaseConfirmation(a) : { id: 'email_claim' };
+      calls.push(['email_sendCaseConfirmation', a]);
+      if (emailOverrides.sendCaseConfirmation) return emailOverrides.sendCaseConfirmation(a);
+      return { id: 'RE_test_abc123' };
     },
-    sendStaffNotification: async (a) => { calls.push(['sendStaffNotification', a]); },
+    sendStaffNotification: async (a) => {
+      calls.push(['email_sendStaffNotification', a]);
+    },
   },
 };
 
 const { handler } = require('../netlify/functions/cedar-elevenlabs.js');
-const KEY = 'a'.repeat(32);
 
-// POST the flat tool body ElevenLabs sends: top-level tool_name, call_sid,
-// caller_id, and the tool's own fields as top-level parameters.
-async function post(body, headers = {}) {
-  const res = await handler({
-    httpMethod: 'POST',
-    body: JSON.stringify(body),
-    headers: { 'x-pma-tool-key': KEY, ...headers },
-  });
-  assert.equal(res.statusCode, 200);
-  return { statusCode: res.statusCode, body: JSON.parse(res.body) };
-}
+const KEY = 'k'.repeat(48);
+const SECRET = 's'.repeat(32);
+process.env.PMA_ELEVENLABS_TOOL_KEY = KEY;
+process.env.ELEVENLABS_WEBHOOK_SECRET = SECRET;
+process.env.PMA_CREATE_DELAY_MS = '0'; // disable processing delay in tests; delay-specific tests override this
+
+const post = (body, headers = {}) => handler({ httpMethod: 'POST', headers, body: JSON.stringify(body), isBase64Encoded: false });
 
 const incidentBody = {
   tool_name: 'create_incident',
-  call_sid: 'CA_123',
+  call_sid: 'CA7b66a46003a7f8ae13e3726b47967a1f',
+  conversation_id: 'conv_123',
   caller_id: '+17025550100',
-  reportedName: 'Jane Doe',
-  reportedAddress: '100 Main St',
-  reportedUnit: 'Unit 5',
-  description: 'Gas smell in the kitchen',
+  reportedName: 'Test Caller',
+  reportedAddress: '1 Test St',
+  reportedUnit: '2-25',
+  description: 'I smelled gas so I left.',
 };
+
+test('flat ElevenLabs tool body with valid key creates incident', async () => {
+  calls.length = 0;
+  const res = await post(incidentBody, { 'X-PMA-Tool-Key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.incident_number, 'INC-1');
+  const start = calls.find((c) => c[0] === 'start')[1];
+  assert.deepEqual(start, { call_sid: incidentBody.call_sid, caller_number: '+17025550100' });
+  const inc = calls.find((c) => c[0] === 'createIncident')[1];
+  assert.equal(inc.session_id, 'sess_1');
+  assert.deepEqual(inc.args, { reportedName: 'Test Caller', reportedAddress: '1 Test St', reportedUnit: '2-25', description: 'I smelled gas so I left.' });
+});
+
+test('missing or wrong key is rejected with 401', async () => {
+  assert.equal((await post(incidentBody)).statusCode, 401);
+  assert.equal((await post(incidentBody, { 'x-pma-tool-key': 'x'.repeat(48) })).statusCode, 401);
+});
+
+test('close_session with empty parameters routes correctly', async () => {
+  calls.length = 0;
+  const res = await post({ tool_name: 'close_session', call_sid: 'CA1', conversation_id: 'conv_1', caller_id: '+17025550100' }, { 'x-pma-tool-key': KEY });
+  assert.equal(JSON.parse(res.body).state, 'CLOSED');
+  assert.ok(calls.some((c) => c[0] === 'close'));
+});
+
+test('falls back to conversation_id when call_sid absent', async () => {
+  calls.length = 0;
+  await post({ ...incidentBody, call_sid: undefined }, { 'x-pma-tool-key': KEY });
+  assert.equal(calls.find((c) => c[0] === 'start')[1].call_sid, 'conv_123');
+});
+
+test('missing tool_name returns a non-success tool result', async () => {
+  const { tool_name, ...rest } = incidentBody;
+  const res = await post(rest, { 'x-pma-tool-key': KEY });
+  assert.equal(JSON.parse(res.body).success, false);
+});
+
+test('legacy signed envelope still works', async () => {
+  const body = JSON.stringify({ tool_name: 'close_session', tool_call_id: 'tc_1', parameters: {}, dynamic_variables: { call_sid: 'CA2', session_id: 'sess_9' } });
+  const ts = Math.floor(Date.now() / 1000);
+  const mac = crypto.createHmac('sha256', SECRET).update(`${ts}.${body}`).digest('hex');
+  const res = await handler({ httpMethod: 'POST', headers: { 'elevenlabs-signature': `t=${ts},v0=${mac}` }, body, isBase64Encoded: false });
+  const out = JSON.parse(res.body);
+  assert.equal(out.tool_call_id, 'tc_1');
+  assert.equal(JSON.parse(out.result).state, 'CLOSED');
+});
+
+// ── SMS test cases ──────────────────────────────────────────────────────────
 
 const smsBody = {
   tool_name: 'record_contact_preference',
   call_sid: 'CA_sms_test',
+  conversation_id: 'conv_sms_1',
   caller_id: '+17025550100',
   method: 'sms',
   destination: '+17025550100',
   consent: true,
 };
+
+test('sms method with PMA_SMS_ENABLED=true sends exactly one text and returns notificationSent true', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, true);
+  assert.equal(out.notificationState, 'SENT');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 1);
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'SENT'));
+});
+
+test('PMA_SMS_ENABLED not set returns notificationState DISABLED without calling send', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  delete process.env.PMA_SMS_ENABLED;
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'DISABLED');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+});
+
+test('email method does not trigger SMS send', async () => {
+  calls.length = 0;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  const emailBody = { ...smsBody, method: 'email', destination: 'test@example.com' };
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+  assert.equal(out.notificationSent, false);
+});
+
+test('claim returning ALREADY_SENT short-circuits send and returns that state', async () => {
+  calls.length = 0;
+  storeOverrides.claimSms = async () => ({ success: false, state: 'ALREADY_SENT' });
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete storeOverrides.claimSms;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'ALREADY_SENT');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 0);
+});
+
+test('Twilio error code 21610 records OPTED_OUT and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  smsOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('OPTED_OUT'), { code: 21610, twilioCode: 21610 });
+  };
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete smsOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'OPTED_OUT');
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'OPTED_OUT'));
+});
+
+test('Twilio generic error records FAILED and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  smsOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('network error'), { code: 'ECONNRESET' });
+  };
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete smsOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'FAILED');
+  assert.ok(calls.some((c) => c[0] === 'recordSms' && c[1].outcome === 'FAILED'));
+});
+
+test('staff notifications fire for maintenance and manager numbers after successful claim', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+15550000001';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+15550000002';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 2);
+  const tos = staffCalls.map((c) => c[1].to);
+  assert.ok(tos.includes('+15550000001'));
+  assert.ok(tos.includes('+15550000002'));
+});
+
+test('staff notification fires once when maintenance and manager numbers are the same', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+17025550201';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 1, 'the same number in both variables must get one staff text, not two');
+  assert.equal(staffCalls[0][1].to, '+17025550201');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 1, 'the tenant confirmation must still send exactly once');
+});
+
+test('staff notification fires once when the two numbers are formatting variants of the same number', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+1 702-555-0201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '(702) 555-0201';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 1, 'formatting variants of the same number must get one staff text, not two');
+});
+
+// ── Email test cases ─────────────────────────────────────────────────────────
 
 const emailBody = {
   tool_name: 'record_contact_preference',
   call_sid: 'CA_email_test',
+  conversation_id: 'conv_email_1',
   caller_id: '+17025550100',
   method: 'email',
   destination: 'tenant@example.com',
   consent: true,
 };
 
-const followupBody = {
+test('email method with PMA_EMAIL_ENABLED=true sends confirmation and returns notificationSent true', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, true);
+  assert.equal(out.notificationState, 'SENT');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 1);
+  assert.ok(calls.some((c) => c[0] === 'recordEmail' && c[1].outcome === 'SENT'));
+});
+
+test('email method with PMA_EMAIL_ENABLED not set returns notificationState DISABLED', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  delete process.env.PMA_EMAIL_ENABLED;
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'DISABLED');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 0);
+});
+
+test('email claim returning ALREADY_SENT short-circuits send', async () => {
+  calls.length = 0;
+  storeOverrides.claimEmail = async () => ({ success: false, state: 'ALREADY_SENT' });
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete storeOverrides.claimEmail;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'ALREADY_SENT');
+  assert.equal(calls.filter((c) => c[0] === 'email_sendCaseConfirmation').length, 0);
+});
+
+test('email send failure records FAILED and preference still succeeds', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  emailOverrides.sendCaseConfirmation = async () => {
+    throw Object.assign(new Error('network error'), { code: 'ECONNRESET' });
+  };
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete emailOverrides.sendCaseConfirmation;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.notificationSent, false);
+  assert.equal(out.notificationState, 'FAILED');
+  assert.ok(calls.some((c) => c[0] === 'recordEmail' && c[1].outcome === 'FAILED'));
+});
+
+test('email staff notifications fire after successful claim', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimEmail;
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  process.env.PMA_EMAIL_MAINTENANCE_ADDRESS = 'maintenance@example.com';
+  process.env.PMA_EMAIL_MANAGER_ADDRESS = 'manager@example.com';
+  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.PMA_EMAIL_MAINTENANCE_ADDRESS;
+  delete process.env.PMA_EMAIL_MANAGER_ADDRESS;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'email_sendStaffNotification');
+  assert.equal(staffCalls.length, 2);
+  const tos = staffCalls.map((c) => c[1].to);
+  assert.ok(tos.includes('maintenance@example.com'));
+  assert.ok(tos.includes('manager@example.com'));
+});
+
+// ── get_case_status test cases ───────────────────────────────────────────────
+
+const statusBody = {
+  tool_name: 'get_case_status',
+  call_sid: 'CA_status_test',
+  conversation_id: 'conv_status_1',
+  caller_id: '+17025550100',
+};
+
+test('get_case_status found by caller ID returns case details', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true);
+  assert.equal(out.caseNumber, 'INC-1');
+  assert.equal(out.status, 'OPEN');
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.caller_number, '+17025550100');
+  assert.equal(lookup.case_number, null);
+});
+
+test('get_case_status passes case_number when caller provides it', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post({ ...statusBody, case_number: 'PMA-ABC123' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.case_number, 'PMA-ABC123');
+});
+
+test('get_case_status with invalid caller_id passes null caller_number', async () => {
+  calls.length = 0;
+  delete storeOverrides.lookupCase;
+  const res = await post({ ...statusBody, caller_id: 'not-e164' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const lookup = calls.find((c) => c[0] === 'lookupCase')[1];
+  assert.equal(lookup.caller_number, null);
+});
+
+test('get_case_status MULTIPLE_CASES returns state to Ava', async () => {
+  calls.length = 0;
+  storeOverrides.lookupCase = async () => ({ success: false, state: 'MULTIPLE_CASES', count: 3 });
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  delete storeOverrides.lookupCase;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, false);
+  assert.equal(out.state, 'MULTIPLE_CASES');
+  assert.equal(out.count, 3);
+});
+
+test('get_case_status NOT_FOUND returns not-found state', async () => {
+  calls.length = 0;
+  storeOverrides.lookupCase = async () => ({ success: false, state: 'NOT_FOUND' });
+  const res = await post(statusBody, { 'x-pma-tool-key': KEY });
+  delete storeOverrides.lookupCase;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, false);
+  assert.equal(out.state, 'NOT_FOUND');
+});
+
+// ── Language capture ──────────────────────────────────────────────────────────
+
+test('create_incident passes language=es from body to store args', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  const res = await post({ ...incidentBody, language: 'es' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const inc = calls.find((c) => c[0] === 'createIncident')[1];
+  assert.equal(inc.args.language, 'es');
+});
+
+test('create_incident omits language key for unknown locale', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  const res = await post({ ...incidentBody, language: 'fr' }, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const inc = calls.find((c) => c[0] === 'createIncident')[1];
+  assert.ok(!Object.prototype.hasOwnProperty.call(inc.args, 'language'));
+});
+
+test('sms claim language=es is forwarded to sendCaseConfirmation', async () => {
+  calls.length = 0;
+  storeOverrides.claimSms = async () => ({ success: true, destination: '+17025550100', caseNumber: 'INC-1', requestId: 'req_1', language: 'es' });
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete storeOverrides.claimSms;
+  const smsCall = calls.find((c) => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall, 'sendCaseConfirmation must have been called');
+  assert.equal(smsCall[1].language, 'es');
+});
+
+test('email claim language=es is forwarded to sendCaseConfirmation', async () => {
+  calls.length = 0;
+  storeOverrides.claimEmail = async () => ({ success: true, destination: 'tenant@example.com', caseNumber: 'INC-1', requestId: 'req_1', language: 'es' });
+  delete emailOverrides.sendCaseConfirmation;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  process.env.RESEND_API_KEY = 're_test_key';
+  await post(emailBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_EMAIL_ENABLED;
+  delete process.env.RESEND_API_KEY;
+  delete storeOverrides.claimEmail;
+  const emailCall = calls.find((c) => c[0] === 'email_sendCaseConfirmation');
+  assert.ok(emailCall, 'email sendCaseConfirmation must have been called');
+  assert.equal(emailCall[1].language, 'es');
+});
+
+// ── Processing pause ──────────────────────────────────────────────────────────
+
+test('processing delay fires for non-urgent create_incident', async () => {
+  calls.length = 0;
+  delete storeOverrides.createIncident;
+  process.env.PMA_CREATE_DELAY_MS = '150';
+  const t0 = Date.now();
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  const elapsed = Date.now() - t0;
+  process.env.PMA_CREATE_DELAY_MS = '0';
+  assert.equal(res.statusCode, 200);
+  assert.ok(elapsed >= 100, `expected >= 100ms delay, got ${elapsed}ms`);
+});
+
+test('processing delay is bypassed for urgent create_incident', async () => {
+  calls.length = 0;
+  storeOverrides.createIncident = async (a) => {
+    calls.push(['createIncident', a]);
+    return { success: true, state: 'CONFIRMED', caseNumber: 'INC-2', urgentReviewRequired: true };
+  };
+  process.env.PMA_CREATE_DELAY_MS = '500';
+  const t0 = Date.now();
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  const elapsed = Date.now() - t0;
+  process.env.PMA_CREATE_DELAY_MS = '0';
+  delete storeOverrides.createIncident;
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.urgentReviewRequired, true);
+  assert.ok(elapsed < 400, `expected no delay for urgent, got ${elapsed}ms`);
+});
+
+// ── Portal link tests ──────────────────────────────────────────────────────
+
+const portalSmsBody = {
   tool_name: 'record_contact_preference',
-  call_sid: 'CA_followup_test',
+  call_sid: 'CA_portal_sms_1',
+  conversation_id: 'conv_portal_sms_1',
   caller_id: '+17025550100',
   method: 'sms',
   destination: '+17025550100',
   consent: true,
-  case_number: 'PMA-OLD',
 };
 
-const followupBodyEmail = {
+const portalEmailBody = {
   tool_name: 'record_contact_preference',
-  call_sid: 'CA_followup_email',
+  call_sid: 'CA_portal_email_1',
+  conversation_id: 'conv_portal_email_1',
   caller_id: '+17025550100',
   method: 'email',
   destination: 'tenant@example.com',
   consent: true,
-  case_number: 'PMA-OLD',
 };
 
-test('create_incident success stores the case and returns reply', async () => {
+test('issuePortalToken is called with a 64-char hex hash on SMS confirmation', async () => {
   calls.length = 0;
-  const res = await post(incidentBody);
+  process.env.PMA_SMS_ENABLED = 'true';
+  const res = await post(portalSmsBody, { 'x-pma-tool-key': KEY });
   assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.incident_number, 'INC-1');
-  assert.equal(res.body.state, 'CREATED');
-  const start = calls.find(c => c[0] === 'start');
-  assert.deepEqual(start[1], { call_sid: 'CA_123', caller_number: '+17025550100' });
-  const incident = calls.find(c => c[0] === 'createIncident');
-  assert.deepEqual(incident[1], {
-    session_id: 'sess_1',
-    call_sid: 'CA_123',
-    args: {
-      reportedName: 'Jane Doe',
-      reportedAddress: '100 Main St',
-      reportedUnit: 'Unit 5',
-      description: 'Gas smell in the kitchen',
-    },
-  });
+  const tokenCall = calls.find(c => c[0] === 'issuePortalToken');
+  assert.ok(tokenCall, 'issuePortalToken should be called');
+  assert.match(tokenCall[1].token_hash, /^[0-9a-f]{64}$/, 'token_hash must be 64-char hex (SHA-256)');
+  assert.ok(tokenCall[1].request_id, 'request_id must be present');
+  delete process.env.PMA_SMS_ENABLED;
 });
 
-test('create_incident urgentReviewRequired returns the flag', async () => {
-  storeOverrides.createIncident = async () => ({
-    success: true,
-    state: 'CREATED',
-    incident_number: 'INC-EMR-1',
-    urgentReviewRequired: true,
-    reply: 'Help is on the way.',
-  });
-  const res = await post(incidentBody);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.incident_number, 'INC-EMR-1');
-  assert.equal(res.body.urgentReviewRequired, true);
-  delete storeOverrides.createIncident;
+test('portal link is passed to sendCaseConfirmation on SMS path', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  const smsCall = calls.find(c => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall, 'sendCaseConfirmation should be called');
+  const link = smsCall[1].portalLink;
+  if (link !== null) assert.match(link, /^https:\/\/pma\.stellaruc\.com\/status\?t=/, 'portal link must be correct URL');
+  delete process.env.PMA_SMS_ENABLED;
 });
+
+test('portal link is null and not sent when issuePortalToken returns {exists:true}', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.issuePortalToken = async () => ({ exists: true });
+  await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  const smsCall = calls.find(c => c[0] === 'sendCaseConfirmation');
+  assert.ok(smsCall);
+  assert.equal(smsCall[1].portalLink, null, 'portal link must be null when token already exists');
+  delete storeOverrides.issuePortalToken;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('portal token failure does not break SMS confirmation', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.issuePortalToken = async () => { throw new Error('DB_TIMEOUT'); };
+  const res = await post(portalSmsBody, { 'x-pma-tool-key': KEY });
+  assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.notificationSent, true, 'SMS should still send even when portal token fails');
+  delete storeOverrides.issuePortalToken;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('issuePortalToken is called on email confirmation path', async () => {
+  calls.length = 0;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  await post(portalEmailBody, { 'x-pma-tool-key': KEY });
+  const tokenCall = calls.find(c => c[0] === 'issuePortalToken');
+  assert.ok(tokenCall, 'issuePortalToken should be called on email path');
+  delete process.env.PMA_EMAIL_ENABLED;
+});
+
+// ── Emergency escalation tests ──────────────────────────────────────────────
 
 test('emergency escalation fires sendEmergencyEscalation to both staff numbers when urgentReviewRequired', async () => {
   calls.length = 0;
@@ -221,12 +708,21 @@ test('emergency escalation fires sendEmergencyEscalation to both staff numbers w
     reply: 'Help is on the way.',
   });
   const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  // Give the fire-and-forget Promise.allSettled a tick to resolve
   await new Promise(r => setImmediate(r));
   assert.equal(res.statusCode, 200);
+  const out = JSON.parse(res.body);
+  assert.equal(out.urgentReviewRequired, true);
   const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
-  assert.equal(escalations.length, 2, 'escalation must go to maintenance and manager numbers');
-  assert.deepEqual(escalations.map(c => c[1].to), ['+17025550201', '+17025550202']);
-  assert.equal(escalations[0][1].caseNumber, 'INC-EMR-1');
+  assert.equal(escalations.length, 2, 'two emergency escalations should fire (maintenance + manager)');
+  const tos = escalations.map(c => c[1].to).sort();
+  assert.deepEqual(tos, ['+17025550201', '+17025550202'].sort());
+  escalations.forEach(([, args]) => {
+    assert.equal(args.caseNumber, 'INC-EMR-1');
+    assert.equal(args.address, incidentBody.reportedAddress);
+    assert.equal(args.description, incidentBody.description);
+    assert.equal(args.callerPhone, incidentBody.caller_id);
+  });
   delete storeOverrides.createIncident;
   delete process.env.PMA_SMS_ENABLED;
   delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
@@ -246,8 +742,9 @@ test('emergency escalation fires once when maintenance and manager numbers are t
     reply: 'Help is on the way.',
   });
   const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise((r) => setImmediate(r));
   assert.equal(res.statusCode, 200);
-  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  const escalations = calls.filter((c) => c[0] === 'sendEmergencyEscalation');
   assert.equal(escalations.length, 1, 'the same number in both variables must get one emergency text, not two');
   assert.equal(escalations[0][1].to, '+17025550201');
   delete storeOverrides.createIncident;
@@ -269,8 +766,9 @@ test('emergency escalation fires once when the two numbers are formatting varian
     reply: 'Help is on the way.',
   });
   const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise((r) => setImmediate(r));
   assert.equal(res.statusCode, 200);
-  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  const escalations = calls.filter((c) => c[0] === 'sendEmergencyEscalation');
   assert.equal(escalations.length, 1, 'formatting variants of the same number must get one emergency text, not two');
   delete storeOverrides.createIncident;
   delete process.env.PMA_SMS_ENABLED;
@@ -278,349 +776,177 @@ test('emergency escalation fires once when the two numbers are formatting varian
   delete process.env.PMA_SMS_MANAGER_NUMBER;
 });
 
-test('get_case_status returns scheduled times in the property timezone', async () => {
-  storeOverrides.lookupCase = async () => ({
+test('emergency escalation does NOT fire when PMA_SMS_ENABLED is not true', async () => {
+  calls.length = 0;
+  delete process.env.PMA_SMS_ENABLED;
+  storeOverrides.createIncident = async () => ({
     success: true,
-    caseNumber: 'INC-1',
-    status: 'OPEN',
-    summary: 'Gas smell reported',
-    category: 'gas',
-    priority: 'high',
-    createdAt: '2026-10-27T00:00:00Z',
-    scheduledStart: '2026-10-28T16:00:00Z',
-    scheduledEnd: '2026-10-28T19:00:00Z',
-    propertyTimezone: 'America/Los_Angeles',
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-2',
+    urgentReviewRequired: true,
   });
-  const res = await post({
-    tool_name: 'get_case_status',
-    call_sid: 'CA_status',
-    caller_id: '+17025550100',
-    case_number: 'INC-1',
-  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
   assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.caseNumber, 'INC-1');
-  assert.equal(res.body.scheduledStartLocal, '9 AM');
-  assert.equal(res.body.scheduledEndLocal, '12 PM');
-  assert.match(res.body.scheduledDayLocal, /Wednesday/);
-  assert.equal(res.body.caseNumberSpoken, 'I, N, C, dash, 1');
-  delete storeOverrides.lookupCase;
+  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 0, 'no escalation when SMS disabled');
+  delete storeOverrides.createIncident;
+});
+
+test('emergency escalation does NOT fire for non-emergency incidents', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-NORMAL-1',
+    urgentReviewRequired: false,
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const escalations = calls.filter(c => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 0, 'no escalation for normal priority incident');
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('emergency escalation failure does not affect the response returned to Ava', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  smsOverrides.sendEmergencyEscalation = async () => { throw new Error('TWILIO_DOWN'); };
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-3',
+    urgentReviewRequired: true,
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise(r => setImmediate(r));
+  assert.equal(res.statusCode, 200, 'response must be 200 even if escalation SMS fails');
+  const out = JSON.parse(res.body);
+  assert.equal(out.success, true, 'success must be true even if escalation SMS fails');
+  delete smsOverrides.sendEmergencyEscalation;
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+});
+
+// ---- follow-up call: text or email about a case filed earlier ----------------
+const followupBody = (extra = {}) => ({
+  tool_name: 'record_contact_preference',
+  call_sid: 'CA_followup_1',
+  conversation_id: 'conv_followup_1',
+  caller_id: '+17025550100',
+  method: 'sms',
+  destination: '+17025550100',
+  consent: true,
+  case_number: 'PMA-OLD',
+  ...extra,
+});
+const noIncidentOnThisCall = async () => { throw new Error('PMA_RPC_42501'); };
+const parse = (res) => JSON.parse(res.body);
+
+test('follow-up call sends the tenant text and records it, with no staff alert', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, true);
+  assert.equal(res.notificationState, 'SENT');
+  const pref = calls.find((c) => c[0] === 'recordFollowupPreference')[1];
+  assert.equal(pref.caller_number, '+17025550100');
+  assert.equal(pref.case_number, 'PMA-OLD');
+  const sent = calls.find((c) => c[0] === 'sendCaseConfirmation')[1];
+  assert.equal(sent.caseNumber, 'PMA-OLD');
+  assert.equal(sent.language, 'es');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].outcome, 'SENT');
+  assert.equal(calls.some((c) => c[0] === 'sendStaffNotification'), false);
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up call on a case this phone did not file sends nothing', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  storeOverrides.recordFollowupPreference = async () => ({ success: false, state: 'NOT_ELIGIBLE' });
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.state, 'NOT_ELIGIBLE');
+  assert.equal(calls.some((c) => c[0] === 'sendCaseConfirmation'), false);
+  delete storeOverrides.recordPreference;
+  delete storeOverrides.recordFollowupPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up text failure is recorded and reported', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  smsOverrides.sendCaseConfirmation = async () => { throw Object.assign(new Error('x'), { code: 21610 }); };
+  const res = parse(await post(followupBody(), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, false);
+  assert.equal(res.notificationState, 'OPTED_OUT');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].outcome, 'OPTED_OUT');
+  delete smsOverrides.sendCaseConfirmation;
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+test('follow-up email uses the email sender', async () => {
+  calls.length = 0;
+  process.env.PMA_EMAIL_ENABLED = 'true';
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody({ method: 'email', destination: 'tenant@example.com' }), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.notificationSent, true);
+  assert.equal(calls.find((c) => c[0] === 'email_sendCaseConfirmation')[1].to, 'tenant@example.com');
+  assert.equal(calls.find((c) => c[0] === 'recordFollowupResult')[1].message_ref, 'RE_test_abc123');
+  delete storeOverrides.recordPreference;
+  delete process.env.PMA_EMAIL_ENABLED;
+});
+
+test('a preference failure without a case number still reports UNKNOWN', async () => {
+  calls.length = 0;
+  storeOverrides.recordPreference = noIncidentOnThisCall;
+  const res = parse(await post(followupBody({ case_number: undefined }), { 'x-pma-tool-key': KEY }));
+  assert.equal(res.state, 'UNKNOWN');
+  assert.equal(calls.some((c) => c[0] === 'recordFollowupPreference'), false);
+  delete storeOverrides.recordPreference;
+});
+
+test('the call that filed the case keeps the normal path even with a case number', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  await post(followupBody(), { 'x-pma-tool-key': KEY });
+  assert.equal(calls.some((c) => c[0] === 'recordFollowupPreference'), false);
+  assert.ok(calls.some((c) => c[0] === 'claimSms'));
+  delete process.env.PMA_SMS_ENABLED;
+});
+
+// ---- 2026-11-17 audit: a text must never go to one of our own lines ---------
+test('sms destination equal to the PMA line is replaced by the caller number, with no env set', async () => {
+  calls.length = 0;
+  for (const k of ['PMA_SMS_FROM_NUMBER', 'PMA_VENDOR_FROM', 'TWILIO_PHONE_NUMBER']) delete process.env[k];
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_1', conversation_id: 'conv_ownline_1', caller_id: '+17023087429', destination: '+17252010584' }, { 'x-pma-tool-key': KEY });
+  const pref = calls.find((c) => c[0] === 'recordPreference')[1];
+  assert.equal(pref.args.destination, '+17023087429');
+});
+
+test('sms destination equal to another Stellar line is replaced too', async () => {
+  calls.length = 0;
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_2', conversation_id: 'conv_ownline_2', caller_id: '+17023087429', destination: '(725) 330-5102' }, { 'x-pma-tool-key': KEY });
+  assert.equal(calls.find((c) => c[0] === 'recordPreference')[1].args.destination, '+17023087429');
+});
+
+test('a different number the caller names is kept', async () => {
+  calls.length = 0;
+  await post({ ...portalSmsBody, call_sid: 'CA_ownline_3', conversation_id: 'conv_ownline_3', caller_id: '+17023087429', destination: '+17025550199' }, { 'x-pma-tool-key': KEY });
+  assert.equal(calls.find((c) => c[0] === 'recordPreference')[1].args.destination, '+17025550199');
 });
 
 test('get_case_status success includes the case number spelled for read-back', async () => {
-  const res = await post({
-    tool_name: 'get_case_status',
-    call_sid: 'CA_status',
-    caller_id: '+17025550100',
-    case_number: 'INC-1',
-  });
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.caseNumber, 'INC-1');
-  assert.equal(res.body.caseNumberSpoken, 'I, N, C, dash, 1');
-});
-
-test('get_case_status with missing caller returns NOT_FOUND', async () => {
-  storeOverrides.lookupCase = async () => ({ success: false, state: 'NOT_FOUND' });
-  const res = await post({
-    tool_name: 'get_case_status',
-    call_sid: 'CA_status2',
-    caller_id: '',
-    case_number: 'INC-1',
-  });
-  assert.equal(res.body.success, false);
-  assert.equal(res.body.state, 'NOT_FOUND');
-  delete storeOverrides.lookupCase;
-});
-
-test('close_session closes the session', async () => {
-  calls.length = 0;
-  const res = await post({
-    tool_name: 'close_session',
-    call_sid: 'CA_close',
-    caller_id: '+17025550100',
-  });
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.state, 'CLOSED');
-  assert.ok(calls.some(c => c[0] === 'close'));
-});
-
-test('unauthenticated request is rejected with 401', async () => {
-  const res = await handler({
-    httpMethod: 'POST',
-    body: JSON.stringify(incidentBody),
-    headers: {},
-  });
-  assert.equal(res.statusCode, 401);
-});
-
-test('non-POST method returns 405', async () => {
-  const res = await handler({
-    httpMethod: 'GET',
-    body: '',
-    headers: {},
-  });
-  assert.equal(res.statusCode, 405);
-});
-
-test('invalid JSON body returns 400', async () => {
-  const res = await handler({
-    httpMethod: 'POST',
-    body: '{invalid json',
-    headers: { 'x-pma-tool-key': KEY },
-  });
-  assert.equal(res.statusCode, 400);
-});
-
-test('unknown tool returns UNSUPPORTED_TOOL', async () => {
-  const res = await post({
-    tool_name: 'do_something_else',
-    call_sid: 'CA_unknown',
-    caller_id: '+17025550100',
-  });
-  assert.equal(res.body.success, false);
-  assert.equal(res.body.state, 'UNSUPPORTED_TOOL');
-});
-
-test('session_id is created lazily via start when not provided', async () => {
-  calls.length = 0;
-  const res = await post({
-    tool_name: 'create_incident',
-    call_sid: 'CA_lazy',
-    caller_id: '+17025550100',
-    reportedName: 'Lazy Session',
-    reportedAddress: '1 Lazy Ln',
-    description: 'Test lazy init',
-  });
-  assert.equal(res.body.success, true);
-  const start = calls.find(c => c[0] === 'start');
-  assert.deepEqual(start[1], { call_sid: 'CA_lazy', caller_number: '+17025550100' });
-});
-
-test('sms method with PMA_SMS_ENABLED=false records DISABLED without sending', async () => {
-  calls.length = 0;
-  delete process.env.PMA_SMS_ENABLED;
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.notificationSent, false);
-  assert.equal(res.body.notificationState, 'DISABLED');
-  assert.ok(!calls.some(c => c[0] === 'sendCaseConfirmation'), 'no confirmation should be sent when disabled');
-});
-
-test('sms method with enabled flag sends exactly one text and records SENT', async () => {
-  calls.length = 0;
-  process.env.PMA_SMS_ENABLED = 'true';
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.notificationSent, true);
-  assert.equal(res.body.notificationState, 'SENT');
-  const confirmations = calls.filter(c => c[0] === 'sendCaseConfirmation');
-  assert.equal(confirmations.length, 1, 'exactly one confirmation SMS must be sent');
-  assert.equal(confirmations[0][1].to, '+17025550100');
-  assert.equal(confirmations[0][1].caseNumber, 'INC-1');
-  const record = calls.find(c => c[0] === 'recordSms');
-  assert.equal(record[1].outcome, 'SENT');
-  delete process.env.PMA_SMS_ENABLED;
-});
-
-test('sms method with OPTED_OUT tenant records OPTED_OUT and does not throw', async () => {
-  calls.length = 0;
-  process.env.PMA_SMS_ENABLED = 'true';
-  smsOverrides.sendCaseConfirmation = async () => { throw Object.assign(new Error('OPTED_OUT'), { code: 21610 }); };
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.body.notificationSent, false);
-  assert.equal(res.body.notificationState, 'OPTED_OUT');
-  const record = calls.find(c => c[0] === 'recordSms');
-  assert.equal(record[1].outcome, 'OPTED_OUT');
-  delete smsOverrides.sendCaseConfirmation;
-  delete process.env.PMA_SMS_ENABLED;
-});
-
-test('sms method sends confirmation when claimSms returns a different destination than caller', async () => {
-  calls.length = 0;
-  process.env.PMA_SMS_ENABLED = 'true';
-  storeOverrides.claimSms = async () => ({ success: true, destination: '+17025550999', caseNumber: 'INC-2', requestId: 'req_2' });
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.body.notificationSent, true);
-  const confirmations = calls.filter(c => c[0] === 'sendCaseConfirmation');
-  assert.equal(confirmations[0][1].to, '+17025550999');
-  delete storeOverrides.claimSms;
-  delete process.env.PMA_SMS_ENABLED;
-});
-
-test('sms method own-line guard redirects PMA line to caller number', async () => {
-  calls.length = 0;
-  process.env.PMA_SMS_ENABLED = 'true';
-  storeOverrides.claimSms = async () => ({ success: true, destination: '+17025550100', caseNumber: 'INC-3', requestId: 'req_3' });
-  const ownLineBody = {
-    ...smsBody,
-    destination: '+17252010584', // PMA's own line — must never be texted
-  };
-  const res = await post(ownLineBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.body.notificationSent, true);
-  const confirmations = calls.filter(c => c[0] === 'sendCaseConfirmation');
-  assert.equal(confirmations[0][1].to, '+17025550100', 'own line must be replaced with caller number');
-  delete storeOverrides.claimSms;
-  delete process.env.PMA_SMS_ENABLED;
-});
-
-test('staff notifications fire for maintenance and manager numbers after successful claim', async () => {
-  calls.length = 0;
-  delete storeOverrides.claimSms;
-  delete smsOverrides.sendCaseConfirmation;
-  process.env.PMA_SMS_ENABLED = 'true';
-  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
-  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+15550000001';
-  process.env.PMA_SMS_MANAGER_NUMBER = '+15550000002';
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  delete process.env.PMA_SMS_ENABLED;
-  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
-  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
-  delete process.env.PMA_SMS_MANAGER_NUMBER;
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.notificationSent, true);
-  const staffCalls = calls.filter(c => c[0] === 'sendStaffNotification');
-  assert.equal(staffCalls.length, 2);
-  assert.deepEqual(staffCalls.map(c => c[1].to), ['+15550000001', '+15550000002']);
-  assert.equal(staffCalls[0][1].caseNumber, 'INC-1');
-});
-
-test('staff notification fires once when maintenance and manager numbers are the same', async () => {
-  calls.length = 0;
-  delete storeOverrides.claimSms;
-  delete smsOverrides.sendCaseConfirmation;
-  process.env.PMA_SMS_ENABLED = 'true';
-  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
-  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
-  process.env.PMA_SMS_MANAGER_NUMBER = '+17025550201';
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  delete process.env.PMA_SMS_ENABLED;
-  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
-  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
-  delete process.env.PMA_SMS_MANAGER_NUMBER;
-  assert.equal(res.statusCode, 200);
-  const staffCalls = calls.filter(c => c[0] === 'sendStaffNotification');
-  assert.equal(staffCalls.length, 1, 'the same number in both variables must get one staff text, not two');
-  assert.equal(staffCalls[0][1].to, '+17025550201');
-  assert.equal(calls.filter(c => c[0] === 'sendCaseConfirmation').length, 1, 'the tenant confirmation must still send exactly once');
-});
-
-test('staff notification fires once when the two numbers are formatting variants of the same number', async () => {
-  calls.length = 0;
-  delete storeOverrides.claimSms;
-  delete smsOverrides.sendCaseConfirmation;
-  process.env.PMA_SMS_ENABLED = 'true';
-  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
-  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+1 702-555-0201';
-  process.env.PMA_SMS_MANAGER_NUMBER = '(702) 555-0201';
-  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
-  delete process.env.PMA_SMS_ENABLED;
-  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
-  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
-  delete process.env.PMA_SMS_MANAGER_NUMBER;
-  assert.equal(res.statusCode, 200);
-  const staffCalls = calls.filter(c => c[0] === 'sendStaffNotification');
-  assert.equal(staffCalls.length, 1, 'formatting variants of the same number must get one staff text, not two');
-});
-
-test('email method sends tenant email and staff emails', async () => {
-  calls.length = 0;
-  process.env.PMA_EMAIL_ENABLED = 'true';
-  const res = await post(emailBody, { 'x-pma-tool-key': KEY });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.notificationSent, true);
-  assert.equal(res.body.notificationState, 'SENT');
-  assert.equal(calls.filter(c => c[0] === 'sendCaseConfirmation').length, 1);
-  assert.equal(calls.filter(c => c[0] === 'sendStaffNotification').length, 2);
-  delete process.env.PMA_EMAIL_ENABLED;
-});
-
-test('follow-up sms with no incident on this call returns followupContact result', async () => {
-  calls.length = 0;
-  storeOverrides.recordPreference = async () => { throw Object.assign(new Error('PMA_RPC_42501'), { code: '42501' }); };
-  const res = await post(followupBody);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.state, 'CONFIRMED');
-  assert.equal(res.body.notificationSent, false, 'sms disabled so no confirmation should be sent');
-  delete storeOverrides.recordPreference;
-});
-
-test('follow-up sms sends confirmation to the tenant when enabled', async () => {
-  calls.length = 0;
-  process.env.PMA_SMS_ENABLED = 'true';
-  storeOverrides.recordPreference = async () => { throw Object.assign(new Error('PMA_RPC_42501'), { code: '42501' }); };
-  const res = await post(followupBody);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.notificationSent, true);
-  assert.equal(res.body.notificationState, 'SENT');
-  const confirmations = calls.filter(c => c[0] === 'sendCaseConfirmation');
-  assert.equal(confirmations.length, 1, 'exactly one follow-up confirmation must be sent');
-  assert.equal(confirmations[0][1].to, '+17025550100');
-  assert.equal(confirmations[0][1].caseNumber, 'PMA-OLD');
-  assert.equal(confirmations[0][1].language, 'es');
-  assert.equal(confirmations[0][1].portalLink, 'https://pma.stellaruc.com/status?t=portal_token_123');
-  assert.ok(!calls.some(c => c[0] === 'sendStaffNotification'), 'follow-up must NOT notify staff again');
-  delete storeOverrides.recordPreference;
-  delete process.env.PMA_SMS_ENABLED;
-});
-
-test('follow-up email sends confirmation to the tenant when enabled', async () => {
-  calls.length = 0;
-  process.env.PMA_EMAIL_ENABLED = 'true';
-  storeOverrides.recordPreference = async () => { throw Object.assign(new Error('PMA_RPC_42501'), { code: '42501' }); };
-  const res = await post(followupBodyEmail);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.notificationSent, true);
-  assert.equal(res.body.notificationState, 'SENT');
-  assert.equal(calls.filter(c => c[0] === 'sendCaseConfirmation').length, 1);
-  delete storeOverrides.recordPreference;
-  delete process.env.PMA_EMAIL_ENABLED;
-});
-
-test('ElevenLabs signature verification rejects a bad signature', async () => {
-  const res = await handler({
-    httpMethod: 'POST',
-    body: JSON.stringify(incidentBody),
-    headers: { 'elevenlabs-signature': 't=1234567890,v0=badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad' },
-  });
-  assert.equal(res.statusCode, 401);
-});
-
-test('ElevenLabs signature verification accepts a valid signature', async () => {
-  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
-  const body = JSON.stringify(incidentBody);
-  const ts = Math.floor(Date.now() / 1000);
-  const mac = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-  const res = await handler({
-    httpMethod: 'POST',
-    body,
-    headers: { 'elevenlabs-signature': `t=${ts},v0=${mac}` },
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(JSON.parse(res.body).success, true);
-});
-
-test('valid signature overrides missing tool key', async () => {
-  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
-  const body = JSON.stringify(incidentBody);
-  const ts = Math.floor(Date.now() / 1000);
-  const mac = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-  const res = await handler({
-    httpMethod: 'POST',
-    body,
-    headers: { 'elevenlabs-signature': `t=${ts},v0=${mac}` },
-  });
-  assert.equal(res.statusCode, 200);
-});
-
-test('stale signature is rejected', async () => {
-  const secret = process.env.ELEVENLABS_WEBHOOK_SECRET;
-  const body = JSON.stringify(incidentBody);
-  const ts = Math.floor(Date.now() / 1000) - 301;
-  const mac = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-  const res = await handler({
-    httpMethod: 'POST',
-    body,
-    headers: { 'elevenlabs-signature': `t=${ts},v0=${mac}` },
-  });
-  assert.equal(res.statusCode, 401);
+  const res = await post({ tool_name: 'get_case_status', call_sid: 'CA_spell_1', conversation_id: 'conv_spell_1', caller_id: '+17025550100', case_number: 'PMA-19EF63CFA3' }, { 'x-pma-tool-key': KEY });
+  const out = JSON.parse(res.body);
+  assert.equal(out.caseNumberSpoken, 'I, N, C, dash, 1'); // stub case INC-1
 });
