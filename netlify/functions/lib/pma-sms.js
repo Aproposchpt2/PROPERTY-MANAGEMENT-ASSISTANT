@@ -2,6 +2,30 @@
 
 const twilio = require('twilio');
 
+// Staff SMS recipients: PMA_SMS_MAINTENANCE_NUMBER and PMA_SMS_MANAGER_NUMBER
+// often hold the same phone, which used to send each staff message twice.
+// Compare numbers by their digits only, so a +1 or 1 prefix and spaces,
+// dashes, parentheses or dots do not hide a duplicate. The first spelling
+// given is the one kept (and sent to).
+function normalizePhoneNumber(value) {
+  if (value == null) return '';
+  const digits = String(value).replace(/\D/g, '');
+  return digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+}
+
+function dedupePhoneNumbers(numbers) {
+  const seen = new Set();
+  const unique = [];
+  for (const number of numbers || []) {
+    if (!number) continue;
+    const key = normalizePhoneNumber(number);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(number);
+  }
+  return unique;
+}
+
 async function sendCaseConfirmation({ to, caseNumber, language = 'en', portalLink = null, env }) {
   if (!env.PMA_SMS_MESSAGING_SERVICE_SID && !env.PMA_SMS_FROM_NUMBER) {
     throw Object.assign(new Error('SMS_NOT_CONFIGURED'), { code: 'SMS_NOT_CONFIGURED' });
@@ -143,4 +167,4 @@ async function sendEmergencyEscalation({ to, caseNumber, address, description, c
   }
 }
 
-module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms };
+module.exports = { sendCaseConfirmation, sendStaffNotification, sendEmergencyEscalation, sendVendorApprovalRequest, sendVendorSms, normalizePhoneNumber, dedupePhoneNumbers };

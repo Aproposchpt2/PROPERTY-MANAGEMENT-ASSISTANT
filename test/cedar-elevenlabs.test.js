@@ -75,6 +75,10 @@ require.cache[require.resolve(storePath)] = {
 };
 
 // Stub pma-sms so no Twilio is touched.
+// Capture the real dedupe helper before the pma-sms stub below replaces the
+// module for the handler: the handler uses it to decide how many staff texts
+// to send, so the stub must run the real logic - a copy here would only test itself.
+const { dedupePhoneNumbers } = require('../netlify/functions/lib/pma-sms.js');
 const smsPath = path.join(__dirname, '../netlify/functions/lib/pma-sms.js');
 require.cache[require.resolve(smsPath)] = {
   id: smsPath,
@@ -93,6 +97,7 @@ require.cache[require.resolve(smsPath)] = {
       calls.push(['sendEmergencyEscalation', a]);
       if (smsOverrides.sendEmergencyEscalation) return smsOverrides.sendEmergencyEscalation(a);
     },
+    dedupePhoneNumbers,
   },
 };
 
@@ -321,6 +326,44 @@ test('staff notifications fire for maintenance and manager numbers after success
   const tos = staffCalls.map((c) => c[1].to);
   assert.ok(tos.includes('+15550000001'));
   assert.ok(tos.includes('+15550000002'));
+});
+
+test('staff notification fires once when maintenance and manager numbers are the same', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+17025550201';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 1, 'the same number in both variables must get one staff text, not two');
+  assert.equal(staffCalls[0][1].to, '+17025550201');
+  assert.equal(calls.filter((c) => c[0] === 'sendCaseConfirmation').length, 1, 'the tenant confirmation must still send exactly once');
+});
+
+test('staff notification fires once when the two numbers are formatting variants of the same number', async () => {
+  calls.length = 0;
+  delete storeOverrides.claimSms;
+  delete smsOverrides.sendCaseConfirmation;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MESSAGING_SERVICE_SID = 'MG_test';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+1 702-555-0201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '(702) 555-0201';
+  const res = await post(smsBody, { 'x-pma-tool-key': KEY });
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MESSAGING_SERVICE_SID;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+  assert.equal(res.statusCode, 200);
+  const staffCalls = calls.filter((c) => c[0] === 'sendStaffNotification');
+  assert.equal(staffCalls.length, 1, 'formatting variants of the same number must get one staff text, not two');
 });
 
 // ── Email test cases ─────────────────────────────────────────────────────────
@@ -680,6 +723,53 @@ test('emergency escalation fires sendEmergencyEscalation to both staff numbers w
     assert.equal(args.description, incidentBody.description);
     assert.equal(args.callerPhone, incidentBody.caller_id);
   });
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+});
+
+test('emergency escalation fires once when maintenance and manager numbers are the same', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+17025550201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '+17025550201';
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-1',
+    urgentReviewRequired: true,
+    reply: 'Help is on the way.',
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const escalations = calls.filter((c) => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 1, 'the same number in both variables must get one emergency text, not two');
+  assert.equal(escalations[0][1].to, '+17025550201');
+  delete storeOverrides.createIncident;
+  delete process.env.PMA_SMS_ENABLED;
+  delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
+  delete process.env.PMA_SMS_MANAGER_NUMBER;
+});
+
+test('emergency escalation fires once when the two numbers are formatting variants of the same number', async () => {
+  calls.length = 0;
+  process.env.PMA_SMS_ENABLED = 'true';
+  process.env.PMA_SMS_MAINTENANCE_NUMBER = '+1 702-555-0201';
+  process.env.PMA_SMS_MANAGER_NUMBER = '17025550201';
+  storeOverrides.createIncident = async () => ({
+    success: true,
+    state: 'CREATED',
+    caseNumber: 'INC-EMR-1',
+    urgentReviewRequired: true,
+    reply: 'Help is on the way.',
+  });
+  const res = await post(incidentBody, { 'x-pma-tool-key': KEY });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(res.statusCode, 200);
+  const escalations = calls.filter((c) => c[0] === 'sendEmergencyEscalation');
+  assert.equal(escalations.length, 1, 'formatting variants of the same number must get one emergency text, not two');
   delete storeOverrides.createIncident;
   delete process.env.PMA_SMS_ENABLED;
   delete process.env.PMA_SMS_MAINTENANCE_NUMBER;
