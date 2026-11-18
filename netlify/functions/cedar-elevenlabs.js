@@ -263,7 +263,7 @@ async function handle(event, ctx = {}) {
       // so fire-and-forget never reached Twilio. Awaiting adds ~1s to Ava's
       // response — acceptable for an emergency.
       if (result && result.urgentReviewRequired && env.PMA_SMS_ENABLED === 'true') {
-        const { sendEmergencyEscalation } = require('./lib/pma-sms');
+        const { sendEmergencyEscalation, dedupePhoneNumbers } = require('./lib/pma-sms');
         const escalationArgs = {
           caseNumber: result.caseNumber,
           address: args.reportedAddress || null,
@@ -271,10 +271,11 @@ async function handle(event, ctx = {}) {
           callerPhone: caller_number_raw || null,
           env,
         };
-        const smsResults = await Promise.allSettled([
-          sendEmergencyEscalation({ to: env.PMA_SMS_MAINTENANCE_NUMBER, ...escalationArgs }),
-          sendEmergencyEscalation({ to: env.PMA_SMS_MANAGER_NUMBER, ...escalationArgs }),
-        ]);
+        // Maintenance and manager are often the same phone: send once, not twice.
+        const staffNumbers = dedupePhoneNumbers([env.PMA_SMS_MAINTENANCE_NUMBER, env.PMA_SMS_MANAGER_NUMBER]);
+        const smsResults = await Promise.allSettled(
+          staffNumbers.map((to) => sendEmergencyEscalation({ to, ...escalationArgs }))
+        );
         smsResults.forEach((r, i) => {
           if (r.status === 'rejected') {
             console.error(JSON.stringify({ event: 'cedar_emergency_escalation_failed', index: i, error: r.reason?.message }));
@@ -316,7 +317,7 @@ async function handle(event, ctx = {}) {
             return respond({ ...result, notificationSent: false, notificationState: claim.state || 'NOT_ELIGIBLE' });
           }
           const portalLink = await issuePortalLink(store, claim.requestId, env);
-          const { sendCaseConfirmation, sendStaffNotification } = require('./lib/pma-sms');
+          const { sendCaseConfirmation, sendStaffNotification, dedupePhoneNumbers } = require('./lib/pma-sms');
           try {
             const { sid } = await sendCaseConfirmation({ to: claim.destination, caseNumber: claim.caseNumber, language: claim.language, portalLink, env });
             notificationSent = true;
@@ -335,10 +336,13 @@ async function handle(event, ctx = {}) {
               console.error(JSON.stringify({ event: 'cedar_sms_record_failed', error: recErr?.message }));
             }
           }
-          await Promise.allSettled([
-            sendStaffNotification({ to: env.PMA_SMS_MAINTENANCE_NUMBER, caseNumber: claim.caseNumber, env }),
-            sendStaffNotification({ to: env.PMA_SMS_MANAGER_NUMBER, caseNumber: claim.caseNumber, env }),
-          ]);
+          // Maintenance and manager are often the same phone: notify once, not twice.
+          // The tenant confirmation above is untouched — still one text, to the caller only.
+          await Promise.allSettled(
+            dedupePhoneNumbers([env.PMA_SMS_MAINTENANCE_NUMBER, env.PMA_SMS_MANAGER_NUMBER]).map((to) =>
+              sendStaffNotification({ to, caseNumber: claim.caseNumber, env })
+            )
+          );
         } catch (smsFlowErr) {
           console.error(JSON.stringify({ event: 'cedar_sms_flow_failed', error: smsFlowErr?.message }));
         }
