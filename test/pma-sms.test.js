@@ -31,7 +31,7 @@ require.cache[require.resolve('twilio')] = {
   },
 };
 
-const { sendEmergencyEscalation, sendStaffNotification } = require('../netlify/functions/lib/pma-sms.js');
+const { sendEmergencyEscalation, sendStaffNotification, normalizePhoneNumber, dedupePhoneNumbers } = require('../netlify/functions/lib/pma-sms.js');
 
 const baseEnv = {
   TWILIO_ACCOUNT_SID: 'ACtest',
@@ -144,4 +144,36 @@ test('sendStaffNotification sends generic new-case message', async () => {
   const body = twilioMessages[0].body;
   assert.match(body, /INC-100/);
   assert.doesNotMatch(body, /🚨/, 'staff notification must NOT use emergency formatting');
+});
+
+// ── normalizePhoneNumber / dedupePhoneNumbers ───────────────────────────────
+
+test('dedupePhoneNumbers keeps one copy when both numbers are identical', () => {
+  assert.deepEqual(dedupePhoneNumbers(['+17025550999', '+17025550999']), ['+17025550999']);
+});
+
+test('dedupePhoneNumbers keeps both numbers when they differ', () => {
+  assert.deepEqual(
+    dedupePhoneNumbers(['+17025550999', '+17025550201']),
+    ['+17025550999', '+17025550201']
+  );
+});
+
+test('dedupePhoneNumbers treats formatting variants of the same number as one', () => {
+  assert.deepEqual(
+    dedupePhoneNumbers(['+1 702-555-0199', '17025550199', '(702) 555-0199']),
+    ['+1 702-555-0199']
+  );
+});
+
+test('dedupePhoneNumbers skips empty and missing numbers', () => {
+  assert.deepEqual(dedupePhoneNumbers([null, '', '+17025550999', undefined]), ['+17025550999']);
+  assert.deepEqual(dedupePhoneNumbers([]), []);
+});
+
+test('normalizePhoneNumber strips formatting and the US country code', () => {
+  assert.equal(normalizePhoneNumber('+1 702-555-0199'), '7025550199');
+  assert.equal(normalizePhoneNumber('17025550199'), '7025550199');
+  assert.equal(normalizePhoneNumber('(702) 555-0199'), '7025550199');
+  assert.equal(normalizePhoneNumber('7025550199'), '7025550199');
 });
